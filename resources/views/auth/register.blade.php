@@ -131,7 +131,7 @@
 
             <p class="pt-2 text-center text-sm text-gray-600">
                 Already have an account?
-                <a href="{{ route('welcome') }}" class="font-semibold text-green-700 hover:underline">Back to Home</a>
+                <a href="{{ url('/') }}" class="font-semibold text-green-700 hover:underline">Back to Home</a>
             </p>
         </form>
     </div>

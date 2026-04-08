@@ -43,7 +43,7 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
-        return redirect(route('login', ['role' => $request->input('role', 'student')]))
+        return redirect('/')
             ->with('status', 'Registration successful. Please log in to continue.');
     }
 }
