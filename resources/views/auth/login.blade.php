@@ -15,7 +15,7 @@
     @endif
 </head>
 
-<body class="min-h-screen bg-[#2f3136] px-4 py-8 font-sans">
+<body class="min-h-screen bg-gradient-to-br from-[#d8e6d8] via-[#cfe3d3] to-[#e7f1e7] px-4 py-8 font-sans relative overflow-hidden">
     @php
         $role = old('role', $selectedRole ?? request('role', 'student'));
         $isStaff = $role === 'staff';
@@ -23,7 +23,10 @@
         $buttonColor = $isStaff ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600';
     @endphp
 
-    <div class="mx-auto w-full max-w-sm overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+    <div class="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-green-300/30 blur-3xl"></div>
+    <div class="pointer-events-none absolute -bottom-20 -right-16 h-64 w-64 rounded-full bg-emerald-200/40 blur-3xl"></div>
+
+    <div class="relative mx-auto w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white/95 shadow-[0_20px_45px_rgba(28,77,43,0.18)] backdrop-blur">
         <div class="bg-gradient-to-b {{ $headerColor }} px-5 py-5 text-white">
             <div class="mb-4">
                 <a href="{{ url('/') }}"
