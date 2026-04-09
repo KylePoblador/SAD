@@ -37,6 +37,17 @@
     </div>
 
     <div class="max-w-lg mx-auto px-4 py-4 space-y-4">
+        @if (session('status'))
+            <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                {{ session('status') }}
+            </div>
+        @endif
+
+        @if (session('error'))
+            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {{ session('error') }}
+            </div>
+        @endif
 
         {{-- Stats --}}
         <div class="grid grid-cols-2 gap-3">
@@ -79,9 +90,9 @@
         <p class="text-base font-bold text-gray-800">Recent Orders</p>
         @forelse($recentOrders ?? [] as $order)
             <div class="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-between">
-                <span class="text-sm font-medium text-gray-800">{{ $order->customer_name }}</span>
+                <span class="text-sm font-medium text-gray-800">{{ data_get($order, 'customer_name', 'Unknown') }}</span>
                 <span
-                    class="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full">{{ strtoupper($order->status) }}</span>
+                    class="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full">{{ strtoupper((string) data_get($order, 'status', 'queued')) }}</span>
             </div>
         @empty
             <div class="bg-white rounded-xl px-4 py-3 shadow-sm">

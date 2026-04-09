@@ -29,6 +29,9 @@ Route::get('/dashboard', function () {
 Route::get('/student/dashboard', [StudentController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('student.dashboard');
+Route::post('/student/orders/{orderId}/feedback', [StudentController::class, 'submitFeedback'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.feedback.submit');
 
 // Student Profile
 Route::get('/student/profile', [StudentController::class, 'profile'])
@@ -61,6 +64,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/wallet',    [DashboardController::class, 'wallet'])->name('staff.wallet');
     Route::get('/staff/seats',     [DashboardController::class, 'seats'])->name('staff.seats');
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
+    Route::post('/staff/feedbacks/reply/{feedbackIndex}', [DashboardController::class, 'replyFeedback'])->name('staff.feedbacks.reply');
     Route::get('/staff/reports',   [DashboardController::class, 'reports'])->name('staff.reports');
 });
 

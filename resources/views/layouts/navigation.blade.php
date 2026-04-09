@@ -20,6 +20,14 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    @if (session('selected_role', 'student') === 'student')
+                        <x-nav-link :href="route('dashboard') . '#order-status'" :active="false">
+                            {{ __('Order Status') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('dashboard') . '#provide-feedback'" :active="false">
+                            {{ __('Provide Feedback (Completed Only)') }}
+                        </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -83,6 +91,14 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            @if (session('selected_role', 'student') === 'student')
+                <x-responsive-nav-link :href="route('dashboard') . '#order-status'" :active="false">
+                    {{ __('Order Status') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('dashboard') . '#provide-feedback'" :active="false">
+                    {{ __('Provide Feedback (Completed Only)') }}
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->

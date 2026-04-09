@@ -33,6 +33,18 @@
     </div>
 
     <div class="max-w-lg mx-auto px-4 py-4 space-y-4">
+        @if (session('status'))
+            <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                {{ session('status') }}
+            </div>
+        @endif
+
+        @if (session('error'))
+            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {{ session('error') }}
+            </div>
+        @endif
+
 
         {{-- Wallet Balance Card --}}
         <div class="bg-green-500 rounded-2xl p-5 text-white relative overflow-hidden">
@@ -79,6 +91,72 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
+        </div>
+
+        {{-- Order Status + Feedback --}}
+        <div id="order-status" class="bg-white rounded-xl p-4 shadow-sm">
+            <h2 class="text-base font-bold text-gray-800">Order Status</h2>
+            <p class="text-xs text-gray-500 mt-1">Only completed orders can provide feedback.</p>
+
+            <div class="mt-3 space-y-3">
+                @foreach ($orders as $order)
+                    @php
+                        $statusClasses = match ($order['status']) {
+                            'completed' => 'bg-green-100 text-green-700',
+                            'preparing' => 'bg-yellow-100 text-yellow-700',
+                            'ready' => 'bg-indigo-100 text-indigo-700',
+                            default => 'bg-slate-100 text-slate-700',
+                        };
+                    @endphp
+                    <div class="rounded-lg border border-gray-100 px-3 py-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-800">#{{ $order['id'] }}</p>
+                                <p class="text-xs text-gray-500 mt-0.5">Canteen: {{ $order['canteen'] ?? 'N/A' }}</p>
+                            </div>
+                            <span class="text-xs px-2 py-1 rounded-full {{ $statusClasses }}">{{ ucfirst($order['status']) }}</span>
+                        </div>
+
+                        @if ($order['status'] === 'completed')
+                            @if (empty($feedbacks[$order['id']]))
+                                <form id="provide-feedback" method="POST" action="{{ route('student.feedback.submit', $order['id']) }}"
+                                    class="mt-2">
+                                    @csrf
+                                    <label for="feedback_{{ $order['id'] }}"
+                                        class="block text-xs font-semibold text-gray-700 mb-1">Provide Feedback</label>
+                                    <textarea id="feedback_{{ $order['id'] }}" name="feedback" rows="2"
+                                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                        placeholder="Write your feedback for this completed order..."></textarea>
+                                    @error('feedback')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
+                                    <button type="submit"
+                                        class="mt-2 rounded-lg bg-green-500 px-3 py-2 text-xs font-semibold text-white hover:bg-green-600">
+                                        Submit Feedback
+                                    </button>
+                                </form>
+                            @else
+                                <div class="mt-2 rounded-lg border border-green-100 bg-green-50 px-3 py-2">
+                                    <p class="text-xs font-semibold text-green-700">Feedback Submitted</p>
+                                    <p class="mt-1 text-sm text-green-900">"{{ $feedbacks[$order['id']] }}"</p>
+                                </div>
+                            @endif
+
+                            @if (!empty($staffReplies[$order['id']]))
+                                <div class="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                                    <p class="text-xs font-semibold text-blue-700">Staff Reply</p>
+                                    <p class="mt-1 text-sm text-blue-900">"{{ $staffReplies[$order['id']]['message'] }}"</p>
+                                    @if (!empty($staffReplies[$order['id']]['replied_at']))
+                                        <p class="mt-1 text-[11px] text-blue-700">{{ $staffReplies[$order['id']]['replied_at'] }}</p>
+                                    @endif
+                                </div>
+                            @endif
+                        @else
+                            <p class="text-xs text-gray-500 mt-2">Feedback is disabled until this order is completed.</p>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
         </div>
 
         {{-- Browse Canteens --}}
