@@ -124,9 +124,9 @@ body {
         <div>
             <b>Seat availability</b><br>
 
-            @if(session('seat'))
+            @if($hasReservedSeat)
                 <div class="alert alert-success mt-2">
-                    You reserved seat: <b>{{ session('seat') }}</b>
+                    You reserved seat in this canteen: <b>{{ $reservedSeat }}</b>
                 </div>
             @endif
 
@@ -179,9 +179,9 @@ body {
         </div>
         <div class="text-end">
     <button
-    class="btn btn-green mb-1 {{ session('seat') ? '' : 'disabled-btn' }}"
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
     onclick="addToCart('Chicken Adobo Rice', 15)"
-    {{ session('seat') ? '' : 'disabled' }}>
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
             <span class="price">₱15</span>
@@ -200,9 +200,9 @@ body {
         </div>
         <div class="text-end">
 <button
-    class="btn btn-green mb-1 {{ session('seat') ? '' : 'disabled-btn' }}"
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
     onclick="addToCart('Pancit Canton', 45)"
-    {{ session('seat') ? '' : 'disabled' }}>
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
             <span class="price">₱45</span>
@@ -221,9 +221,9 @@ body {
         </div>
         <div class="text-end">
       <button
-    class="btn btn-green mb-1 {{ session('seat') ? '' : 'disabled-btn' }}"
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
     onclick="addToCart('Lumpia Shanghai', 30)"
-    {{ session('seat') ? '' : 'disabled' }}>
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
             <span class="price">₱30</span>

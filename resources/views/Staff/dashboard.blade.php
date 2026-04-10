@@ -25,8 +25,9 @@
     <div class="bg-green-500 px-4 py-4 text-white sticky top-0 z-10">
         <div class="flex items-center justify-between max-w-lg mx-auto">
             <div>
-                <h1 class="text-lg font-bold">CEIT Main Canteen</h1>
+                <h1 class="text-lg font-bold">{{ $staffCollegeName ?? 'Assigned Canteen' }}</h1>
                 <p class="text-xs opacity-85">Staff Dashboard</p>
+                <p class="text-[10px] opacity-80 mt-0.5">{{ $collegeCode ?? '' }}</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white cursor-pointer" fill="none"
                 viewBox="0 0 24 24" stroke="currentColor">

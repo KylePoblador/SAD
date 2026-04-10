@@ -151,6 +151,10 @@ Route::middleware('auth')->group(function () {
             ->where('college', $college)
             ->count();
         $availableSeats = max($totalSeats - $occupiedCount, 0);
+        $reservedSeat = DB::table('seat_reservations')
+            ->where('college', $college)
+            ->where('user_id', Auth::id())
+            ->value('seat_number');
 
         return view("student.canteen.$college", [
             'college' => $college,
@@ -158,6 +162,8 @@ Route::middleware('auth')->group(function () {
             'totalSeats' => $totalSeats,
             'occupiedCount' => $occupiedCount,
             'availableSeats' => $availableSeats,
+            'reservedSeat' => $reservedSeat,
+            'hasReservedSeat' => $reservedSeat !== null,
         ]);
 
     })->name('student.canteen');
@@ -185,19 +191,24 @@ Route::middleware('auth')->group(function () {
         $alreadyTaken = DB::table('seat_reservations')
             ->where('college', $validated['college'])
             ->where('seat_number', $validated['seat'])
+            ->where('user_id', '!=', $request->user()->id)
             ->exists();
 
         if ($alreadyTaken) {
             return back()->with('error', 'Seat is already reserved. Please choose another seat.');
         }
 
-        DB::table('seat_reservations')->insert([
-            'user_id' => $request->user()->id,
-            'college' => $validated['college'],
-            'seat_number' => $validated['seat'],
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::table('seat_reservations')->updateOrInsert(
+            [
+                'user_id' => $request->user()->id,
+                'college' => $validated['college'],
+            ],
+            [
+                'seat_number' => $validated['seat'],
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
 
         return redirect()
             ->route('student.canteen', ['college' => $validated['college']])

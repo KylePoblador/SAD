@@ -64,13 +64,15 @@
 
             <div>
                 <label for="college" class="mb-1 block text-xs font-semibold text-gray-700">Select College *</label>
-                <select id="college"
-                    class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
-                    <option>Choose your college</option>
-                    <option>College of Engineering</option>
-                    <option>College of Business</option>
-                    <option>College of Arts and Sciences</option>
+                <select id="college" name="college"
+                    class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <option value="">Choose your college</option>
+                    <option value="ceit" {{ old('college') === 'ceit' ? 'selected' : '' }}>CEIT - College of Engineering and Information Technology</option>
+                    <option value="cass" {{ old('college') === 'cass' ? 'selected' : '' }}>CASS - College of Arts and Social Sciences</option>
+                    <option value="chefs" {{ old('college') === 'chefs' ? 'selected' : '' }}>CHEFS - College of Human Ecology and Food Sciences</option>
+                    <option value="cti" {{ old('college') === 'cti' ? 'selected' : '' }}>CTI - College of Trade and Industry</option>
                 </select>
+                <x-input-error :messages="$errors->get('college')" class="mt-1" />
             </div>
 
             <div id="studentFields" class="space-y-4">
