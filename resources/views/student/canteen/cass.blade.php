@@ -167,66 +167,108 @@ body {
 
     <!-- ITEMS -->
 
-    <!-- ITEM 1 -->
+    <!-- ITEM 1 - Mainit na Taho -->
     <div class="menu-item d-flex justify-content-between align-items-center"
-         data-category="Meals" data-price="65">
+         data-category="Beverages" data-price="25">
         <div class="d-flex align-items-center">
-            <img src="{{ asset('images/adobo.jpg') }}">
+            <img src="{{ asset('images/taho.jpg') }}">
             <div>
-                <b>Chicken Adobo Rice</b><br>
-                <small class="text-muted">Meals</small>
+                <b>Mainit na Taho</b><br>
+                <small class="text-muted">Beverages</small>
             </div>
         </div>
         <div class="text-end">
     <button
     class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
-    onclick="addToCart('Chicken Adobo Rice', 65)"
+    onclick="addToCart('Mainit na Taho', 25)"
     {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
-            <span class="price">₱65</span>
+            <span class="price">₱25</span>
         </div>
     </div>
 
-    <!-- ITEM 2 -->
+    <!-- ITEM 2 - Fish Soup -->
     <div class="menu-item d-flex justify-content-between align-items-center"
-         data-category="Meals" data-price="45">
+         data-category="Meals" data-price="60">
         <div class="d-flex align-items-center">
-            <img src="{{ asset('images/pancit.jpg') }}">
+            <img src="{{ asset('images/fishsoup.jpg') }}">
             <div>
-                <b>Pancit Canton</b><br>
+                <b>Fish Soup (Sinigang)</b><br>
                 <small class="text-muted">Meals</small>
             </div>
         </div>
         <div class="text-end">
 <button
     class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
-    onclick="addToCart('Pancit Canton', 45)"
+    onclick="addToCart('Fish Soup (Sinigang)', 60)"
     {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
-            <span class="price">₱45</span>
+            <span class="price">₱60</span>
         </div>
     </div>
 
-    <!-- ITEM 3 (FIXED CATEGORY) -->
+    <!-- ITEM 3 - Specialty Rice Bowl -->
     <div class="menu-item d-flex justify-content-between align-items-center"
-         data-category="Snacks" data-price="30">
+         data-category="Meals" data-price="55">
         <div class="d-flex align-items-center">
-            <img src="{{ asset('images/lumpia.jpg') }}">
+            <img src="{{ asset('images/ricebowl.jpg') }}">
             <div>
-                <b>Lumpia Shanghai</b><br>
+                <b>Specialty Rice Bowl</b><br>
+                <small class="text-muted">Meals</small>
+            </div>
+        </div>
+        <div class="text-end">
+      <button
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
+    onclick="addToCart('Specialty Rice Bowl', 55)"
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
+    Add to Cart
+</button><br>
+            <span class="price">₱55</span>
+        </div>
+    </div>
+
+    <!-- ITEM 4 - Fried Spring Rolls -->
+    <div class="menu-item d-flex justify-content-between align-items-center"
+         data-category="Snacks" data-price="35">
+        <div class="d-flex align-items-center">
+            <img src="{{ asset('images/springrolls.jpg') }}">
+            <div>
+                <b>Fried Spring Rolls</b><br>
                 <small class="text-muted">Snacks</small>
             </div>
         </div>
         <div class="text-end">
       <button
     class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
-    onclick="addToCart('Lumpia Shanghai', 30)"
+    onclick="addToCart('Fried Spring Rolls', 35)"
     {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
-            <span class="price">₱30</span>
+            <span class="price">₱35</span>
+        </div>
+    </div>
+
+    <!-- ITEM 5 - Mango Float -->
+    <div class="menu-item d-flex justify-content-between align-items-center"
+         data-category="Desserts" data-price="40">
+        <div class="d-flex align-items-center">
+            <img src="{{ asset('images/mangofloat.jpg') }}">
+            <div>
+                <b>Mango Float</b><br>
+                <small class="text-muted">Desserts</small>
+            </div>
+        </div>
+        <div class="text-end">
+      <button
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
+    onclick="addToCart('Mango Float', 40)"
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
+    Add to Cart
+</button><br>
+            <span class="price">₱40</span>
         </div>
     </div>
 

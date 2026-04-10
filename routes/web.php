@@ -114,6 +114,7 @@ Route::middleware('auth')->group(function () {
     */
 
     Route::get('/staff/orders', [DashboardController::class, 'orders'])->name('staff.orders');
+    Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
 
     Route::get('/staff/menu', [DashboardController::class, 'menu'])->name('staff.menu');
 

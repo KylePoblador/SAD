@@ -167,11 +167,11 @@ body {
 
     <!-- ITEMS -->
 
-    <!-- ITEM 1 -->
+    <!-- ITEM 1 - Pastil -->
     <div class="menu-item d-flex justify-content-between align-items-center"
-         data-category="Meals" data-price="65">
+         data-category="Meals" data-price="15">
         <div class="d-flex align-items-center">
-            <img src="{{ asset('images/adobo.jpg') }}">
+            <img src="{{ asset('images/pastil.jpg') }}">
             <div>
                 <b>Pastil</b><br>
                 <small class="text-muted">Meals</small>
@@ -180,7 +180,7 @@ body {
         <div class="text-end">
     <button
     class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
-    onclick="addToCart('Chicken Adobo Rice', 15)"
+    onclick="addToCart('Pastil', 15)"
     {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
@@ -188,45 +188,87 @@ body {
         </div>
     </div>
 
-    <!-- ITEM 2 -->
+    <!-- ITEM 2 - Budget Rice & Viand -->
     <div class="menu-item d-flex justify-content-between align-items-center"
-         data-category="Meals" data-price="45">
+         data-category="Meals" data-price="25">
         <div class="d-flex align-items-center">
-            <img src="{{ asset('images/pancit.jpg') }}">
+            <img src="{{ asset('images/budgeteats.jpg') }}">
             <div>
-                <b>Pancit Canton</b><br>
+                <b>Rice & Viand Combo</b><br>
                 <small class="text-muted">Meals</small>
             </div>
         </div>
         <div class="text-end">
 <button
     class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
-    onclick="addToCart('Pancit Canton', 45)"
+    onclick="addToCart('Rice & Viand Combo', 25)"
     {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
-            <span class="price">₱45</span>
+            <span class="price">₱25</span>
         </div>
     </div>
 
-    <!-- ITEM 3 (FIXED CATEGORY) -->
+    <!-- ITEM 3 - Affordable Noodle Soup -->
     <div class="menu-item d-flex justify-content-between align-items-center"
-         data-category="Snacks" data-price="30">
+         data-category="Meals" data-price="30">
         <div class="d-flex align-items-center">
-            <img src="{{ asset('images/lumpia.jpg') }}">
+            <img src="{{ asset('images/noodlesoup.jpg') }}">
             <div>
-                <b>Lumpia Shanghai</b><br>
+                <b>Affordable Noodle Soup</b><br>
+                <small class="text-muted">Meals</small>
+            </div>
+        </div>
+        <div class="text-end">
+      <button
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
+    onclick="addToCart('Affordable Noodle Soup', 30)"
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
+    Add to Cart
+</button><br>
+            <span class="price">₱30</span>
+        </div>
+    </div>
+
+    <!-- ITEM 4 - Budget Fried Snacks -->
+    <div class="menu-item d-flex justify-content-between align-items-center"
+         data-category="Snacks" data-price="20">
+        <div class="d-flex align-items-center">
+            <img src="{{ asset('images/friedsnacks.jpg') }}">
+            <div>
+                <b>Budget Fried Snacks</b><br>
                 <small class="text-muted">Snacks</small>
             </div>
         </div>
         <div class="text-end">
       <button
     class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
-    onclick="addToCart('Lumpia Shanghai', 30)"
+    onclick="addToCart('Budget Fried Snacks', 20)"
     {{ $hasReservedSeat ? '' : 'disabled' }}>
     Add to Cart
 </button><br>
-            <span class="price">₱30</span>
+            <span class="price">₱20</span>
+        </div>
+    </div>
+
+    <!-- ITEM 5 - Cold Beverages -->
+    <div class="menu-item d-flex justify-content-between align-items-center"
+         data-category="Beverages" data-price="15">
+        <div class="d-flex align-items-center">
+            <img src="{{ asset('images/coldbeverage.jpg') }}">
+            <div>
+                <b>Cold Beverage</b><br>
+                <small class="text-muted">Beverages</small>
+            </div>
+        </div>
+        <div class="text-end">
+      <button
+    class="btn btn-green mb-1 {{ $hasReservedSeat ? '' : 'disabled-btn' }}"
+    onclick="addToCart('Cold Beverage', 15)"
+    {{ $hasReservedSeat ? '' : 'disabled' }}>
+    Add to Cart
+</button><br>
+            <span class="price">₱15</span>
         </div>
     </div>
 
