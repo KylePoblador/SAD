@@ -5,6 +5,21 @@
 <div class="container text-center mt-3">
 
     <h4>Select your seat</h4>
+    @php
+        $totalSeats = 25;
+        $occupiedCount = count($occupied ?? []);
+        $availableCount = $totalSeats - $occupiedCount;
+    @endphp
+
+    <div class="d-flex justify-content-center gap-2 mb-3">
+        <span class="badge bg-success">Available: {{ $availableCount }}</span>
+        <span class="badge bg-danger">Occupied: {{ $occupiedCount }}</span>
+        <span class="badge bg-secondary">Total: {{ $totalSeats }}</span>
+    </div>
+
+    @if (session('error'))
+        <div class="alert alert-danger mt-3">{{ session('error') }}</div>
+    @endif
 
     {{-- FILTER --}}
     <div class="mb-3">
@@ -18,7 +33,7 @@
     <div class="d-flex flex-wrap justify-content-center">
 
         @php
-            $occupied = [1,2,3,4,5,6,7,8,9,10,11,12,13];
+            $occupied = $occupied ?? [];
         @endphp
 
         @for ($i = 1; $i <= 25; $i++)
@@ -35,6 +50,7 @@
     {{-- FORM --}}
     <form action="{{ route('student.confirm.seat') }}" method="POST">
         @csrf
+        <input type="hidden" name="college" value="{{ $college }}">
         <input type="hidden" name="seat" id="seatInput">
 
         <button class="btn btn-success mt-4 px-5">

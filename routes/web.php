@@ -3,6 +3,8 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StudentController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -144,26 +146,62 @@ Route::middleware('auth')->group(function () {
             abort(404);
         }
 
+        $totalSeats = 25;
+        $occupiedCount = DB::table('seat_reservations')
+            ->where('college', $college)
+            ->count();
+        $availableSeats = max($totalSeats - $occupiedCount, 0);
+
         return view("student.canteen.$college", [
             'college' => $college,
-            'canteenName' => $canteens[$college]
+            'canteenName' => $canteens[$college],
+            'totalSeats' => $totalSeats,
+            'occupiedCount' => $occupiedCount,
+            'availableSeats' => $availableSeats,
         ]);
 
     })->name('student.canteen');
 
 
     Route::get('/student/reserve/{college}', function ($college) {
+        $occupied = DB::table('seat_reservations')
+            ->where('college', $college)
+            ->pluck('seat_number')
+            ->all();
+
         return view('student.reservation.reserve', [
-            'college' => $college
+            'college' => $college,
+            'occupied' => $occupied,
         ]);
     })->name('student.reserve');
 
 
-    Route::post('/student/confirm-seat', function (\Illuminate\Http\Request $request) {
+    Route::post('/student/confirm-seat', function (Request $request) {
+        $validated = $request->validate([
+            'college' => ['required', 'string'],
+            'seat' => ['required', 'integer', 'between:1,25'],
+        ]);
+
+        $alreadyTaken = DB::table('seat_reservations')
+            ->where('college', $validated['college'])
+            ->where('seat_number', $validated['seat'])
+            ->exists();
+
+        if ($alreadyTaken) {
+            return back()->with('error', 'Seat is already reserved. Please choose another seat.');
+        }
+
+        DB::table('seat_reservations')->insert([
+            'user_id' => $request->user()->id,
+            'college' => $validated['college'],
+            'seat_number' => $validated['seat'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         return redirect()
-            ->route('student.canteen', ['college' => 'ceit'])
-            ->with('seat', $request->seat);
+            ->route('student.canteen', ['college' => $validated['college']])
+            ->with('seat', $validated['seat']);
 
     })->name('student.confirm.seat');
 

@@ -130,7 +130,7 @@ body {
                 </div>
             @endif
 
-            <small class="text-muted">12/25 Available</small>
+            <small class="text-muted">{{ $availableSeats }}/{{ $totalSeats }} Available</small>
         </div>
 
         <a href="{{ route('student.reserve', $college) }}" class="btn btn-green">

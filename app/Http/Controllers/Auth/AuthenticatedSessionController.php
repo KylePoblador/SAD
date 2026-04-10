@@ -32,6 +32,7 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        $request->session()->put('selected_role', Auth::user()->role);
 
         $role = Auth::user()->role;
 
