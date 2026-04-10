@@ -26,21 +26,19 @@ class AuthenticatedSessionController extends Controller
             'selectedRole' => $role,
         ]);
     }
+public function store(LoginRequest $request): RedirectResponse
+{
+    $request->authenticate();
+    $request->session()->regenerate();
 
-    public function store(LoginRequest $request): RedirectResponse
-    {
-        $request->authenticate();
+    $role = Auth::user()->role;
 
-        $request->session()->regenerate();
-
-        $role = Auth::user()->role;
-
-        if ($role === 'staff') {
-            return redirect()->route('dashboard');
-        } else {
-            return redirect()->route('student.dashboard');
-        }
+    if ($role === 'staff') {
+        return redirect()->route('staff.dashboard');
     }
+
+    return redirect()->route('student.dashboard');
+}
 
     public function destroy(Request $request): RedirectResponse
     {

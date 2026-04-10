@@ -19,8 +19,6 @@ class UserFactory extends Factory
 
     /**
      * Define the model's default state.
-     *
-     * @return array<string, mixed>
      */
     public function definition(): array
     {
@@ -30,11 +28,34 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+
+            // 🔥 FIX: ROLE ADDED
+            'role' => fake()->randomElement(['student', 'staff']),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Student state
+     */
+    public function student(): static
+    {
+        return $this->state(fn () => [
+            'role' => 'student',
+        ]);
+    }
+
+    /**
+     * Staff state
+     */
+    public function staff(): static
+    {
+        return $this->state(fn () => [
+            'role' => 'staff',
+        ]);
+    }
+
+    /**
+     * Unverified email state
      */
     public function unverified(): static
     {
