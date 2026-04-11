@@ -72,6 +72,26 @@ Route::get('/student/profile', [StudentController::class, 'profile'])
     ->middleware(['auth','verified'])
     ->name('student.profile');
 
+Route::get('/student/notification', [StudentController::class, 'notifications'])
+    ->middleware(['auth','verified'])
+    ->name('student.notification');
+
+Route::get('/student/notification-data', [StudentController::class, 'notificationData'])
+    ->middleware(['auth','verified'])
+    ->name('student.notification.data');
+
+Route::get('/student/notification-stream', [StudentController::class, 'notificationStream'])
+    ->middleware(['auth','verified'])
+    ->name('student.notification.stream');
+
+Route::post('/student/notification/{orderId}/read', [StudentController::class, 'markNotificationAsRead'])
+    ->middleware(['auth','verified'])
+    ->name('student.notification.mark-read');
+
+Route::get('/student/unread-count', [StudentController::class, 'unreadNotificationCount'])
+    ->middleware(['auth','verified'])
+    ->name('student.unread-count');
+
 Route::patch('/student/profile', [StudentController::class, 'updateProfile'])
     ->middleware(['auth','verified'])
     ->name('student.profile.update');
@@ -115,6 +135,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/staff/orders', [DashboardController::class, 'orders'])->name('staff.orders');
     Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
+    Route::get('/staff/notification', [DashboardController::class, 'notification'])->name('staff.notification');
+    Route::get('/staff/notification-data', [DashboardController::class, 'notificationData'])->name('staff.notification.data');
 
     Route::get('/staff/menu', [DashboardController::class, 'menu'])->name('staff.menu');
 

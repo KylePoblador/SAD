@@ -117,7 +117,7 @@
                 Transaction History
             </a>
 
-            <a href="#"
+            <a href="{{ route('student.notifications') }}">
                 class="w-full block text-center border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm hover:bg-gray-50">
                 Notifications
             </a>

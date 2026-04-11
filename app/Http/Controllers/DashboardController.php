@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Order;
 
@@ -10,7 +11,7 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        $collegeCode = auth()->user()->college ?: 'ceit';
+        $collegeCode = Auth::user()->college ?: 'ceit';
         $canteenNames = [
             'ceit' => 'CEIT Canteen',
             'cass' => 'CASS Food Hub',
@@ -37,6 +38,53 @@ class DashboardController extends Controller
         return view('staff.profile');
     }
 
+    public function notification()
+    {
+        return view('Staff.notification');
+    }
+
+    public function notificationData()
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+
+        $orders = Order::where('canteen_id', $collegeCode)
+            ->orderBy('created_at', 'desc')
+            ->take(5)
+            ->get();
+
+        $notifications = $orders->map(function ($order) {
+            $statusText = match ($order->status) {
+                'pending' => 'new order received',
+                'preparing' => 'order is being prepared',
+                'ready' => 'order is ready for pickup',
+                'completed' => 'order has been completed',
+                default => 'order status updated',
+            };
+
+            return [
+                'title' => "Order {$order->order_number} {$statusText}",
+                'message' => "Total: ₱{$order->total}",
+                'time' => $order->created_at->diffForHumans(),
+                'status' => $order->status,
+            ];
+        });
+
+        if ($notifications->isEmpty()) {
+            return response()->json([
+                'notifications' => [
+                    [
+                        'title' => 'No notifications yet',
+                        'message' => 'New orders will appear here automatically.',
+                        'time' => '',
+                        'status' => 'empty',
+                    ],
+                ],
+            ]);
+        }
+
+        return response()->json(['notifications' => $notifications]);
+    }
+
     public function updateProfile(Request $request)
     {
         $request->user()->update([
@@ -50,7 +98,7 @@ class DashboardController extends Controller
     public function orders(Request $request)
     {
         $status = $request->query('status', 'pending');
-        $collegeCode = auth()->user()->college ?: 'ceit';
+        $collegeCode = Auth::user()->college ?: 'ceit';
 
         // Map college codes to canteen names
         $canteenNames = [

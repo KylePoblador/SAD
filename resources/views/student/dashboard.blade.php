@@ -45,16 +45,19 @@
         <div class="flex items-center gap-4">
 
             {{-- notification --}}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032
+            <a href="{{ route('student.notification') }}" class="text-gray-500 hover:text-green-600 relative">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032
 2.032 0 0118 14.158V11a6 6
 0 10-12 0v3.159c0 .538-.214
 1.055-.595 1.436L4 17h5m6
 0v1a3 3 0 11-6 0v-1m6 0H9" />
-
-            </svg>
+                </svg>
+                <span id="unread-badge"
+                    class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold text-[10px]"
+                    style="display: none;">0</span>
+            </a>
 
 
             {{-- cart --}}
@@ -276,8 +279,26 @@ px-2 py-1 rounded-lg">
 
     </div>
 
+    <script>
+        // Update unread notification count
+        const unreadBadge = document.getElementById('unread-badge');
+        const unreadCountEndpoint = '{{ route('student.unread-count') }}';
 
+        async function updateUnreadCount() {
+                try {
+                    const response = await fetch(unreadCountEndpoint, {
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                    });
+                    const data = await response.json();
+                    const count = data.unread_count || 0;
 
-</body>
+                    if (count > 0) {
+                        unreadBadge.textContent = count > 99 ? '99+' : count;
+                        unreadBadge.style.display = 'flex';
+                    } else {
+                        unreadBadge.style.display = 'none';
 
-</html>
+                        <
+                        /html>

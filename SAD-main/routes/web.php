@@ -40,6 +40,11 @@ Route::patch('/student/profile', [StudentController::class, 'updateProfile'])
     ->middleware(['auth', 'verified'])
     ->name('student.profile.update');
 
+// ✅ Student Notifications (ADDED)
+Route::get('/student/notifications', [StudentController::class, 'notifications'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.notifications');
+
 // Staff Profile
 Route::get('/staff/profile', [DashboardController::class, 'profile'])
     ->middleware(['auth', 'verified'])
