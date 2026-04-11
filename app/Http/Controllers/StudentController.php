@@ -14,11 +14,18 @@ class StudentController extends Controller
         $user = auth()->user();
 
         $baseCanteens = [
-            ['name' => 'CEIT Canteen', 'college' => 'ceit', 'dist' => '50m', 'rating' => '4.5'],
-            ['name' => 'CASS Food Hub', 'college' => 'cass', 'dist' => '120m', 'rating' => '4.2'],
-            ['name' => 'CHEFS Dining', 'college' => 'chefs', 'dist' => '200m', 'rating' => '4.8'],
-            ['name' => 'CTI Canteen', 'college' => 'cti', 'dist' => '20m', 'rating' => '4.1'],
+            'ceit' => ['name' => 'CEIT Canteen', 'dist' => '50m', 'rating' => '4.5'],
+            'cass' => ['name' => 'CASS Food Hub', 'dist' => '120m', 'rating' => '4.2'],
+            'chefs' => ['name' => 'CHEFS Dining', 'dist' => '200m', 'rating' => '4.8'],
+            'cti' => ['name' => 'CTI Canteen', 'dist' => '20m', 'rating' => '4.1'],
+            'cbdem' => ['name' => 'CBDEM Snack Bar', 'dist' => '180m', 'rating' => '4.3'],
         ];
+
+        $staffByCollege = User::where('role', 'staff')
+            ->whereNotNull('college')
+            ->whereIn('college', array_keys($baseCanteens))
+            ->get()
+            ->groupBy('college');
 
         $occupiedMap = DB::table('seat_reservations')
             ->select('college', DB::raw('COUNT(*) as occupied_count'))
@@ -26,16 +33,37 @@ class StudentController extends Controller
             ->pluck('occupied_count', 'college');
 
         $totalSeats = 25;
-        $canteens = array_map(function (array $canteen) use ($occupiedMap, $totalSeats) {
-            $occupied = (int) ($occupiedMap[$canteen['college']] ?? 0);
+        $canteens = [];
+
+        foreach ($baseCanteens as $college => $canteenInfo) {
+            $staffCollection = $staffByCollege[$college] ?? collect();
+            if ($staffCollection->isEmpty()) {
+                continue;
+            }
+
+            $occupied = (int) ($occupiedMap[$college] ?? 0);
             $available = max($totalSeats - $occupied, 0);
 
-            return [
-                ...$canteen,
+            $staffNames = $staffCollection->pluck('name')
+                ->filter()
+                ->values()
+                ->all();
+
+            $staffLabel = count($staffNames) > 2
+                ? $staffNames[0] . ', ' . $staffNames[1] . ' +' . (count($staffNames) - 2) . ' more'
+                : implode(', ', $staffNames);
+
+            $canteens[] = [
+                'name' => $canteenInfo['name'],
+                'college' => $college,
+                'dist' => $canteenInfo['dist'],
+                'rating' => $canteenInfo['rating'],
                 'seats' => $available . '/' . $totalSeats,
                 'full' => $available === 0,
+                'staff_names' => $staffLabel,
+                'staff_count' => $staffCollection->count(),
             ];
-        }, $baseCanteens);
+        }
 
         return view('student.dashboard', [
             'canteens' => $canteens,

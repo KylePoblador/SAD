@@ -11,7 +11,7 @@
         }
 
         .header{
-            background:#06b6d4;
+            background:#16a34a;
             color:white;
             padding:20px;
         }
@@ -56,7 +56,7 @@
         .stat-value{
             font-size:32px;
             font-weight:bold;
-            color:#06b6d4;
+            color:#16a34a;
         }
 
         .seating-section{
@@ -64,7 +64,7 @@
             padding:20px;
             border-radius:10px;
             margin-bottom:20px;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
+            box-shadow:0 2px 5px rgba(0,0,0,0.08);
         }
 
         .seating-section h3{
@@ -84,12 +84,15 @@
             border:2px solid #ddd;
             border-radius:8px;
             display:flex;
+            flex-direction:column;
             align-items:center;
             justify-content:center;
             cursor:pointer;
             font-weight:bold;
             font-size:12px;
             transition:all 0.3s ease;
+            padding:8px;
+            text-align:center;
         }
 
         .seat:hover{
@@ -114,6 +117,17 @@
             color:#856404;
         }
 
+        .seat-number{
+            font-size:14px;
+            margin-bottom:4px;
+        }
+
+        .seat-student{
+            font-size:10px;
+            line-height:1.2;
+            opacity:0.85;
+        }
+
         .legend{
             display:flex;
             gap:20px;
@@ -135,7 +149,7 @@
         }
 
         .reserve-btn{
-            background:#06b6d4;
+            background:#16a34a;
             color:white;
             border:none;
             padding:12px 20px;
@@ -147,7 +161,30 @@
         }
 
         .reserve-btn:hover{
-            background:#0891b2;
+            background:#15803d;
+        }
+
+        .alert{
+            background:#d1fae5;
+            border:1px solid #10b981;
+            color:#065f46;
+            padding:14px 18px;
+            border-radius:10px;
+            margin-bottom:20px;
+        }
+
+        .action-panel{
+            background:white;
+            padding:20px;
+            border-radius:10px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.08);
+            margin-top:20px;
+        }
+
+        .note{
+            font-size:13px;
+            color:#14532d;
+            margin-top:10px;
         }
     </style>
 </head>
@@ -161,14 +198,18 @@
 
 <div class="container">
 
+    @if(session('status') === 'seat-released')
+        <div class="alert">Seat has been released and is now available.</div>
+    @endif
+
     <div class="stats">
         <div class="stat-card">
             <div class="stat-label">Available</div>
-            <div class="stat-value">8</div>
+            <div class="stat-value">{{ $availableSeats }}</div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Occupied</div>
-            <div class="stat-value">17</div>
+            <div class="stat-value">{{ $occupiedSeats }}</div>
         </div>
     </div>
 
@@ -176,35 +217,17 @@
         <h3>Seating Map</h3>
 
         <div class="seats-grid">
-            <div class="seat available">A1</div>
-            <div class="seat available">A2</div>
-            <div class="seat occupied">A3</div>
-            <div class="seat occupied">A4</div>
-            <div class="seat available">A5</div>
-
-            <div class="seat occupied">B1</div>
-            <div class="seat available">B2</div>
-            <div class="seat reserved">B3</div>
-            <div class="seat occupied">B4</div>
-            <div class="seat occupied">B5</div>
-
-            <div class="seat available">C1</div>
-            <div class="seat occupied">C2</div>
-            <div class="seat occupied">C3</div>
-            <div class="seat available">C4</div>
-            <div class="seat available">C5</div>
-
-            <div class="seat occupied">D1</div>
-            <div class="seat occupied">D2</div>
-            <div class="seat available">D3</div>
-            <div class="seat occupied">D4</div>
-            <div class="seat available">D5</div>
-
-            <div class="seat available">E1</div>
-            <div class="seat available">E2</div>
-            <div class="seat occupied">E3</div>
-            <div class="seat occupied">E4</div>
-            <div class="seat occupied">E5</div>
+            @foreach($seats as $seat)
+                <div class="seat {{ $seat['status'] }}"
+                     data-seat="{{ $seat['number'] }}"
+                     data-status="{{ $seat['status'] }}"
+                     data-student="{{ $seat['student'] ?? '' }}">
+                    <div class="seat-number">{{ $seat['number'] }}</div>
+                    @if($seat['status'] === 'occupied' && $seat['student'])
+                        <div class="seat-student">{{ $seat['student'] }}</div>
+                    @endif
+                </div>
+            @endforeach
         </div>
 
         <div class="legend">
@@ -216,16 +239,50 @@
                 <div class="legend-box" style="background:#f8d7da; border-color:#dc3545;"></div>
                 <span>Occupied</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-box" style="background:#fff3cd; border-color:#ffc107;"></div>
-                <span>Reserved</span>
-            </div>
         </div>
+
+        <div class="note">Tap an occupied seat to release it back to available status.</div>
     </div>
 
-    <button class="reserve-btn">Reserve Seat</button>
+    <div class="action-panel">
+        <form id="releaseForm" action="{{ route('staff.seats.release') }}" method="POST">
+            @csrf
+            <input type="hidden" name="seat_number" id="seat_number" value="">
+            <button id="releaseButton" type="submit" disabled>Release Selected Seat</button>
+        </form>
+        <p id="selectedInfo" class="note">No seat selected.</p>
+    </div>
 
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const seats = document.querySelectorAll('.seat');
+        const releaseButton = document.getElementById('releaseButton');
+        const seatInput = document.getElementById('seat_number');
+        const selectedInfo = document.getElementById('selectedInfo');
+
+        seats.forEach(seat => {
+            seat.addEventListener('click', function () {
+                seats.forEach(s => s.classList.remove('selected'));
+                this.classList.add('selected');
+                const seatNumber = this.dataset.seat;
+                const status = this.dataset.status;
+                const student = this.dataset.student;
+
+                seatInput.value = seatNumber;
+
+                if (status === 'occupied') {
+                    releaseButton.disabled = false;
+                    selectedInfo.textContent = `Seat ${seatNumber} is occupied${student ? ` by ${student}` : ''}. Click release to make it available.`;
+                } else {
+                    releaseButton.disabled = true;
+                    selectedInfo.textContent = `Seat ${seatNumber} is already available.`;
+                }
+            });
+        });
+    });
+</script>
 
 </body>
 </html>

@@ -216,15 +216,17 @@ hover:bg-gray-50 transition">
 
 
                                 <span
-                                    class="text-xs font-medium
-
-{{ $canteen['full'] ? 'text-red-500' : 'text-green-600' }}">
+                                    class="text-xs font-medium {{ $canteen['full'] ? 'text-red-500' : 'text-green-600' }}">
 
                                     ● {{ $canteen['seats'] }} Seats
 
                                 </span>
 
                             </div>
+
+                            <p class="text-xs text-gray-500 mt-2">
+                                Staff: {{ $canteen['staff_names'] }}
+                            </p>
 
                         </div>
 

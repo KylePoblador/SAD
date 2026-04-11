@@ -155,6 +155,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/wallet', [DashboardController::class, 'wallet'])->name('staff.wallet');
 
     Route::get('/staff/seats', [DashboardController::class, 'seats'])->name('staff.seats');
+    Route::post('/staff/seats/release', [DashboardController::class, 'releaseSeat'])->name('staff.seats.release');
 
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
 

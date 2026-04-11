@@ -21,15 +21,21 @@ class DashboardController extends Controller
         ];
         $staffCollegeName = $canteenNames[$collegeCode] ?? 'Assigned Canteen';
 
+        $totalSeats = 25;
+        $occupiedCount = DB::table('seat_reservations')
+            ->where('college', $collegeCode)
+            ->count();
+        $availableSeats = max($totalSeats - $occupiedCount, 0);
+
         return view('staff.dashboard', [
             'staffCollegeName' => $staffCollegeName,
             'collegeCode' => strtoupper($collegeCode),
-            'todayOrders'    => 3,
-            'revenue'        => 285,
-            'availableSeats' => 7,
-            'totalSeats'     => 50,
-            'rating'         => 4.5,
-            'recentOrders'   => [],
+            'todayOrders' => 3,
+            'revenue' => 285,
+            'availableSeats' => $availableSeats,
+            'totalSeats' => $totalSeats,
+            'rating' => 4.5,
+            'recentOrders' => [],
         ]);
     }
 
@@ -203,7 +209,52 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function seats()     { return view('Staff.quickaction.seats'); }
+    public function seats()
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+        $totalSeats = 25;
+
+        $reservedSeats = DB::table('seat_reservations')
+            ->where('seat_reservations.college', $collegeCode)
+            ->join('users', 'seat_reservations.user_id', '=', 'users.id')
+            ->select('seat_reservations.seat_number', 'users.name as student_name')
+            ->get()
+            ->keyBy('seat_number');
+
+        $seats = collect(range(1, $totalSeats))->map(function ($seatNumber) use ($reservedSeats) {
+            $reservation = $reservedSeats->get($seatNumber);
+            return [
+                'number' => $seatNumber,
+                'status' => $reservation ? 'occupied' : 'available',
+                'student' => $reservation->student_name ?? null,
+            ];
+        });
+
+        return view('Staff.quickaction.seats', [
+            'totalSeats' => $totalSeats,
+            'availableSeats' => $seats->where('status', 'available')->count(),
+            'occupiedSeats' => $seats->where('status', 'occupied')->count(),
+            'seats' => $seats,
+        ]);
+    }
+
+    public function releaseSeat(Request $request)
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+
+        $validated = $request->validate([
+            'seat_number' => ['required', 'integer', 'between:1,25'],
+        ]);
+
+        DB::table('seat_reservations')
+            ->where('college', $collegeCode)
+            ->where('seat_number', $validated['seat_number'])
+            ->delete();
+
+        return redirect()->route('staff.seats')
+            ->with('status', 'seat-released');
+    }
+
     public function feedbacks() { return view('Staff.quickaction.feedbacks'); }
     public function reports()   { return view('Staff.quickaction.reports'); }
 }
