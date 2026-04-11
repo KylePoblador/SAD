@@ -161,7 +161,48 @@ class DashboardController extends Controller
         ]);
     }
     public function menu()      { return view('Staff.quickaction.menu'); }
-    public function wallet()    { return view('Staff.quickaction.wallet'); }
+
+    public function wallet()
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+
+        // Map college codes to canteen names
+        $canteenNames = [
+            'ceit' => 'CEIT Canteen',
+            'cass' => 'CASS Food Hub',
+            'chefs' => 'CHEFS Dining',
+            'cti' => 'CTI Canteen',
+            'cbdem' => 'CBDEM Snack Bar',
+        ];
+        $canteenName = $canteenNames[$collegeCode] ?? 'Canteen';
+
+        // Fetch all students registered with this canteen with their wallet balance
+        $students = DB::table('users')
+            ->where('college', $collegeCode)
+            ->where('role', 'student')
+            ->select('id', 'name', 'email', 'college', 'wallet_balance')
+            ->get()
+            ->map(function($student) {
+                // Get total spent by this student
+                $totalSpent = Order::where('user_id', $student->id)->sum('total');
+
+                return (object)[
+                    'id' => $student->id,
+                    'name' => $student->name,
+                    'email' => $student->email,
+                    'college' => $student->college,
+                    'balance' => $student->wallet_balance, // Get balance from database
+                    'total_spent' => $totalSpent,
+                ];
+            });
+
+        return view('Staff.quickaction.wallet', [
+            'canteenName' => $canteenName,
+            'collegeCode' => strtoupper($collegeCode),
+            'students' => $students,
+        ]);
+    }
+
     public function seats()     { return view('Staff.quickaction.seats'); }
     public function feedbacks() { return view('Staff.quickaction.feedbacks'); }
     public function reports()   { return view('Staff.quickaction.reports'); }

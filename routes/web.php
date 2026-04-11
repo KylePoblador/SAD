@@ -72,6 +72,18 @@ Route::get('/student/profile', [StudentController::class, 'profile'])
     ->middleware(['auth','verified'])
     ->name('student.profile');
 
+Route::get('/student/orders', [StudentController::class, 'orders'])
+    ->middleware(['auth','verified'])
+    ->name('student.orders');
+
+Route::get('/student/wallet', [StudentController::class, 'wallet'])
+    ->middleware(['auth','verified'])
+    ->name('student.wallet');
+
+Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'updateWalletBalance'])
+    ->middleware(['auth','verified'])
+    ->name('student.wallet.update');
+
 Route::get('/student/notification', [StudentController::class, 'notifications'])
     ->middleware(['auth','verified'])
     ->name('student.notification');

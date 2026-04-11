@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>CoinMeal - Student Dashboard</title>
+    <title>CoinMeal - My Wallet</title>
 
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet" />
 
@@ -80,174 +80,87 @@ M7 13l-1.5 6h13M7 13L5.4 5M10
 
     <div class="max-w-lg mx-auto px-4 py-4 space-y-4">
 
+        {{-- WALLET CARD --}}
+        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white relative overflow-hidden shadow-lg">
 
-        {{-- WALLET --}}
-        <div class="block">
-            <div class="bg-green-500 rounded-2xl p-5 text-white relative overflow-hidden">
-
-                <div class="flex items-center justify-between mb-2">
-
-                    <p class="text-sm font-medium opacity-90">
-                        Available Balance
-                    </p>
-
-                </div>
-
-                <p class="text-4xl font-bold mb-3">
-                    ₱{{ number_format($walletBalance, 2) }}
+            <div class="relative z-10">
+                <p class="text-sm font-medium opacity-90 mb-2">
+                    Available Balance
                 </p>
 
+                <p class="text-5xl font-bold mb-4">
+                    ₱{{ number_format($wallet['balance'], 2) }}
+                </p>
 
-                <div class="bg-green-400 rounded-xl px-4 py-2 text-xs opacity-90">
-
-                To top up your wallet,
-                visit any canteen counter
-                and deposit cash.
-
+                <div class="bg-white/20 rounded-xl px-4 py-3 backdrop-blur-sm">
+                    <p class="text-xs opacity-90 mb-1">College</p>
+                    <p class="text-sm font-semibold">{{ strtoupper($wallet['college']) }}</p>
+                </div>
             </div>
 
         </div>
-        </div>
 
-
-
-        {{-- STATS --}}
+        {{-- QUICK STATS --}}
         <div class="grid grid-cols-2 gap-3">
 
-            <div class="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm">
-
-                <div>
-                    <p class="text-xs text-gray-500">
-                        Active Orders
-                    </p>
-
-                    <p class="text-xl font-bold text-gray-800">
-                        2
-                    </p>
-                </div>
-
+            <div class="bg-white rounded-xl p-4 shadow-sm">
+                <p class="text-xs text-gray-500 mb-2">
+                    Total Spent
+                </p>
+                <p class="text-2xl font-bold text-gray-800">
+                    ₱{{ number_format($wallet['total_spent'], 2) }}
+                </p>
             </div>
 
-
-
-            <div class="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm">
-
-                <div>
-                    <p class="text-xs text-gray-500">
-                        Total Orders
-                    </p>
-
-                    <p class="text-xl font-bold text-gray-800">
-                        5
-                    </p>
-                </div>
-
+            <div class="bg-white rounded-xl p-4 shadow-sm">
+                <p class="text-xs text-gray-500 mb-2">
+                    Total Orders
+                </p>
+                <p class="text-2xl font-bold text-gray-800">
+                    {{ $wallet['total_orders'] }}
+                </p>
             </div>
 
         </div>
 
+        {{-- WALLET ACTIONS --}}
+        <div class="space-y-3">
+            <button class="w-full bg-green-500 text-white font-semibold py-3 rounded-xl hover:bg-green-600 transition shadow-sm">
+                Top Up Wallet
+            </button>
 
-
-        {{-- ACTIVE ORDER --}}
-        <div class="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-between">
-
-            <div>
-
-                <p class="text-xs text-orange-500 font-semibold">
-                    Active Order
-                </p>
-
-                <p class="text-sm text-gray-700 font-medium">
-
-                    ORD-1738828500234
-                    • Ready for Pickup
-
-                </p>
-
-            </div>
-
+            <button class="w-full bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-300 transition shadow-sm">
+                View Transactions
+            </button>
         </div>
 
-
-
-        {{-- CANTEENS --}}
+        {{-- RECENT TRANSACTIONS --}}
         <div>
-
             <h2 class="text-base font-bold text-gray-800 mb-3">
-
-                Browse Canteens
-
+                Recent Transactions
             </h2>
 
-
-
-            <div class="space-y-3">
-
-                @foreach ($canteens as $canteen)
-                    <a href="{{ route('student.canteen', $canteen['college']) }}"
-                        class="bg-white rounded-xl px-4 py-3 shadow-sm
-flex items-center justify-between
-hover:bg-gray-50 transition">
-
-                        <div>
-
-                            <p class="font-semibold text-gray-800 text-sm">
-
-                                {{ $canteen['name'] }}
-
-                            </p>
-
-
-                            <p class="text-xs text-gray-400">
-
-                                {{ strtoupper($canteen['college']) }}
-
-                            </p>
-
-
-
-                            <div class="flex items-center gap-2 mt-1">
-
-                                <span class="text-xs text-gray-400">
-
-                                    {{ $canteen['dist'] }}
-
-                                </span>
-
-
-                                <span
-                                    class="text-xs font-medium
-
-{{ $canteen['full'] ? 'text-red-500' : 'text-green-600' }}">
-
-                                    ● {{ $canteen['seats'] }} Seats
-
-                                </span>
-
-                            </div>
-
-                        </div>
-
-
-
-                        <div>
-
-                            <span class="bg-yellow-100
-text-yellow-700 text-xs font-bold
-px-2 py-1 rounded-lg">
-
-                                ★ {{ $canteen['rating'] }}
-
-                            </span>
-
-                        </div>
-
-
-                    </a>
-                @endforeach
-
-
+            @forelse($wallet['recent_transactions'] as $transaction)
+            <div class="bg-white rounded-xl p-4 shadow-sm mb-3">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-semibold text-gray-800 text-sm">{{ $transaction['description'] }}</p>
+                        <p class="text-xs text-gray-500 mt-1">{{ $transaction['date'] }}</p>
+                    </div>
+                    <p class="font-bold text-lg {{ $transaction['type'] === 'debit' ? 'text-red-500' : 'text-green-500' }}">
+                        {{ $transaction['type'] === 'debit' ? '-' : '+' }}₱{{ number_format($transaction['amount'], 2) }}
+                    </p>
+                </div>
             </div>
+            @empty
+            <div class="bg-white rounded-xl p-8 text-center shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="text-gray-500 text-sm">No transactions yet</p>
+                <p class="text-gray-400 text-xs mt-1">Your transactions will appear here</p>
+            </div>
+            @endforelse
 
         </div>
 
@@ -259,7 +172,7 @@ px-2 py-1 rounded-lg">
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3">
 
         <a href="{{ route('student.dashboard') }}"
-            class="flex flex-col items-center text-xs text-green-600 font-semibold">
+            class="flex flex-col items-center text-xs text-gray-400">
 
             Home
 
@@ -301,6 +214,19 @@ px-2 py-1 rounded-lg">
                         unreadBadge.style.display = 'flex';
                     } else {
                         unreadBadge.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error updating unread count:', error);
+                }
+        }
 
-                        <
-                        /html>
+        // Update count on page load
+        updateUnreadCount();
+
+        // Update count every 30 seconds
+        setInterval(updateUnreadCount, 30000);
+    </script>
+
+</body>
+
+</html>
