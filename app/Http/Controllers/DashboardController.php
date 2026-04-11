@@ -2,24 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityNotification;
+use App\Models\CanteenFeedback;
+use App\Models\MenuItem;
+use App\Models\Order;
+use App\Models\WalletDepositInquiry;
+use App\Models\WalletLoadLog;
+use App\Services\InAppNotificationFeed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Models\Order;
+use Illuminate\Support\Facades\Storage;
 
 class DashboardController extends Controller
 {
     public function index()
     {
         $collegeCode = Auth::user()->college ?: 'ceit';
-        $canteenNames = [
-            'ceit' => 'CEIT Canteen',
-            'cass' => 'CASS Food Hub',
-            'chefs' => 'CHEFS Dining',
-            'cti' => 'CTI Canteen',
-            'cbdem' => 'CBDEM Snack Bar',
-        ];
-        $staffCollegeName = $canteenNames[$collegeCode] ?? 'Assigned Canteen';
+        $catalog = config('canteens', []);
+        $staffCollegeName = $catalog[$collegeCode]['label'] ?? 'Assigned canteen';
 
         $totalSeats = 25;
         $occupiedCount = DB::table('seat_reservations')
@@ -27,21 +28,86 @@ class DashboardController extends Controller
             ->count();
         $availableSeats = max($totalSeats - $occupiedCount, 0);
 
+        $todayOrders = Order::query()
+            ->where('canteen_id', $collegeCode)
+            ->whereDate('created_at', today())
+            ->count();
+
+        $revenue = (float) Order::query()
+            ->where('canteen_id', $collegeCode)
+            ->whereDate('created_at', today())
+            ->sum('total');
+
+        $recentOrders = Order::query()
+            ->where('canteen_id', $collegeCode)
+            ->with('user')
+            ->orderByDesc('created_at')
+            ->take(5)
+            ->get()
+            ->map(fn ($order) => (object) [
+                'customer_name' => $order->user->name ?? 'Customer',
+                'status' => $order->status,
+            ]);
+
         return view('staff.dashboard', [
             'staffCollegeName' => $staffCollegeName,
             'collegeCode' => strtoupper($collegeCode),
-            'todayOrders' => 3,
-            'revenue' => 285,
+            'todayOrders' => $todayOrders,
+            'revenue' => $revenue,
             'availableSeats' => $availableSeats,
             'totalSeats' => $totalSeats,
-            'rating' => 4.5,
-            'recentOrders' => [],
+            'rating' => CanteenFeedback::averageRatingForCollege($collegeCode),
+            'recentOrders' => $recentOrders,
         ]);
+    }
+
+    public function completeDepositInquiry(WalletDepositInquiry $walletDepositInquiry)
+    {
+        $user = Auth::user();
+
+        if ($user->role !== 'staff') {
+            abort(403);
+        }
+
+        $collegeCode = $user->college ? strtolower(trim((string) $user->college)) : 'ceit';
+        $inquiryCollege = strtolower(trim((string) $walletDepositInquiry->college));
+
+        if ($inquiryCollege !== $collegeCode) {
+            abort(403);
+        }
+
+        if ($walletDepositInquiry->status !== 'pending') {
+            return redirect()
+                ->route('staff.wallet')
+                ->with('status', 'deposit-inquiry-already-done');
+        }
+
+        $walletDepositInquiry->update(['status' => 'done']);
+
+        $canteenLabel = config('canteens')[$inquiryCollege]['label'] ?? $walletDepositInquiry->college;
+
+        ActivityNotification::notifyUser(
+            $walletDepositInquiry->user_id,
+            ActivityNotification::TYPE_DEPOSIT_INQUIRY_DONE,
+            'Deposit inquiry completed',
+            'Staff marked your top-up request for '.$canteenLabel.' as done.',
+            $walletDepositInquiry->id
+        );
+
+        return redirect()
+            ->route('staff.wallet')
+            ->with('status', 'deposit-inquiry-completed');
     }
 
     public function profile()
     {
-        return view('staff.profile');
+        $code = Auth::user()->college;
+        $catalog = config('canteens', []);
+
+        return view('staff.profile', [
+            'staffCanteenName' => $code && isset($catalog[$code]) ? $catalog[$code]['label'] : null,
+            'staffCollegeCode' => $code ? strtoupper($code) : null,
+        ]);
     }
 
     public function notification()
@@ -51,52 +117,84 @@ class DashboardController extends Controller
 
     public function notificationData()
     {
-        $collegeCode = Auth::user()->college ?: 'ceit';
+        $user = Auth::user();
+        $collegeCode = $user->college ? strtolower((string) $user->college) : 'ceit';
 
-        $orders = Order::where('canteen_id', $collegeCode)
-            ->orderBy('created_at', 'desc')
-            ->take(5)
-            ->get();
+        $notifications = InAppNotificationFeed::staffItems((int) $user->id, $collegeCode);
 
-        $notifications = $orders->map(function ($order) {
-            $statusText = match ($order->status) {
-                'pending' => 'new order received',
-                'preparing' => 'order is being prepared',
-                'ready' => 'order is ready for pickup',
-                'completed' => 'order has been completed',
-                default => 'order status updated',
-            };
+        return response()->json([
+            'notifications' => $notifications,
+            'unread_count' => InAppNotificationFeed::staffUnreadCount((int) $user->id),
+        ]);
+    }
 
-            return [
-                'title' => "Order {$order->order_number} {$statusText}",
-                'message' => "Total: ₱{$order->total}",
-                'time' => $order->created_at->diffForHumans(),
-                'status' => $order->status,
-            ];
-        });
+    public function markStaffNotificationRead(Request $request)
+    {
+        $validated = $request->validate([
+            'nid' => ['required', 'string', 'regex:/^(a|o):[1-9][0-9]*$/'],
+        ]);
 
-        if ($notifications->isEmpty()) {
-            return response()->json([
-                'notifications' => [
-                    [
-                        'title' => 'No notifications yet',
-                        'message' => 'New orders will appear here automatically.',
-                        'time' => '',
-                        'status' => 'empty',
-                    ],
-                ],
-            ]);
+        InAppNotificationFeed::markStaffRead((int) $request->user()->id, $validated['nid']);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function markAllStaffNotificationsRead(Request $request)
+    {
+        $user = $request->user();
+        if ($user->role !== 'staff') {
+            abort(403);
         }
 
-        return response()->json(['notifications' => $notifications]);
+        InAppNotificationFeed::markAllStaffRead((int) $user->id);
+
+        $collegeCode = $user->college ? strtolower((string) $user->college) : 'ceit';
+
+        return response()->json([
+            'success' => true,
+            'notifications' => InAppNotificationFeed::staffItems((int) $user->id, $collegeCode),
+            'unread_count' => InAppNotificationFeed::staffUnreadCount((int) $user->id),
+        ]);
+    }
+
+    public function clearAllStaffNotifications(Request $request)
+    {
+        $user = $request->user();
+        if ($user->role !== 'staff') {
+            abort(403);
+        }
+
+        InAppNotificationFeed::clearStaffNotificationFeed((int) $user->id);
+
+        $collegeCode = $user->college ? strtolower((string) $user->college) : 'ceit';
+
+        return response()->json([
+            'success' => true,
+            'notifications' => InAppNotificationFeed::staffItems((int) $user->id, $collegeCode),
+            'unread_count' => InAppNotificationFeed::staffUnreadCount((int) $user->id),
+        ]);
     }
 
     public function updateProfile(Request $request)
     {
-        $request->user()->update([
-            'name'  => $request->name,
-            'email' => $request->email,
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255'],
+            'avatar' => ['nullable', 'image', 'max:5000'],
         ]);
+
+        $user = $request->user();
+        $data = [
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+        ];
+
+        $avatarPath = $this->storePublicUserAvatar($request, $user);
+        if ($avatarPath !== null) {
+            $data['avatar_path'] = $avatarPath;
+        }
+
+        $user->update($data);
 
         return redirect()->route('staff.profile')->with('status', 'profile-updated');
     }
@@ -106,15 +204,7 @@ class DashboardController extends Controller
         $status = $request->query('status', 'pending');
         $collegeCode = Auth::user()->college ?: 'ceit';
 
-        // Map college codes to canteen names
-        $canteenNames = [
-            'ceit' => 'CEIT Canteen',
-            'cass' => 'CASS Food Hub',
-            'chefs' => 'CHEFS Dining',
-            'cti' => 'CTI Canteen',
-            'cbdem' => 'CBDEM Snack Bar',
-        ];
-        $canteenName = $canteenNames[$collegeCode] ?? 'Canteen';
+        $canteenName = config('canteens')[$collegeCode]['label'] ?? 'Canteen';
 
         // Fetch actual orders from database filtered by status
         $orders = Order::where('status', $status)
@@ -166,46 +256,155 @@ class DashboardController extends Controller
             'order' => $orderDetail
         ]);
     }
-    public function menu()      { return view('Staff.quickaction.menu'); }
+    public function menu()
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+        $items = MenuItem::query()
+            ->where('college', $collegeCode)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
-    public function wallet()
+        return view('Staff.quickaction.menu', [
+            'menuItems' => $items,
+            'collegeCode' => $collegeCode,
+        ]);
+    }
+
+    public function storeMenuItem(Request $request)
     {
         $collegeCode = Auth::user()->college ?: 'ceit';
 
-        // Map college codes to canteen names
-        $canteenNames = [
-            'ceit' => 'CEIT Canteen',
-            'cass' => 'CASS Food Hub',
-            'chefs' => 'CHEFS Dining',
-            'cti' => 'CTI Canteen',
-            'cbdem' => 'CBDEM Snack Bar',
-        ];
-        $canteenName = $canteenNames[$collegeCode] ?? 'Canteen';
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'category' => ['nullable', 'string', 'max:64'],
+            'photo' => ['required', 'image', 'max:5000'],
+        ]);
 
-        // Fetch all students registered with this canteen with their wallet balance
-        $students = DB::table('users')
-            ->where('college', $collegeCode)
+        $imagePath = $request->file('photo')->store('menu-items/'.$collegeCode, 'public');
+
+        MenuItem::create([
+            'college' => $collegeCode,
+            'name' => $validated['name'],
+            'price' => $validated['price'],
+            'category' => $validated['category'] ?: 'Meals',
+            'image_path' => $imagePath,
+            'is_available' => true,
+            'sort_order' => (MenuItem::where('college', $collegeCode)->max('sort_order') ?? 0) + 1,
+        ]);
+
+        return redirect()->route('staff.menu')->with('status', 'menu-added');
+    }
+
+    public function destroyMenuItem(MenuItem $menuItem)
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+        if ($menuItem->college !== $collegeCode) {
+            abort(403);
+        }
+        if ($menuItem->image_path && Storage::disk('public')->exists($menuItem->image_path)) {
+            Storage::disk('public')->delete($menuItem->image_path);
+        }
+        $menuItem->delete();
+
+        return redirect()->route('staff.menu')->with('status', 'menu-removed');
+    }
+
+    public function toggleMenuItem(MenuItem $menuItem)
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+        if ($menuItem->college !== $collegeCode) {
+            abort(403);
+        }
+        $menuItem->update(['is_available' => ! $menuItem->is_available]);
+
+        return redirect()->route('staff.menu')->with('status', 'menu-updated');
+    }
+
+    public function wallet()
+    {
+        $collegeCode = Auth::user()->college ? strtolower((string) Auth::user()->college) : 'ceit';
+
+        $canteenName = config('canteens')[$collegeCode]['label'] ?? 'Canteen';
+
+        $depositInquiries = WalletDepositInquiry::query()
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
+            ->where('status', 'pending')
+            ->with('user')
+            ->latest()
+            ->get();
+
+        $walletLoadHistory = WalletLoadLog::query()
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
+            ->with(['student:id,name,email,student_id', 'staffMember:id,name'])
+            ->latest()
+            ->take(100)
+            ->get();
+
+        $pendingUserIds = WalletDepositInquiry::query()
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
+            ->where('status', 'pending')
+            ->pluck('user_id')
+            ->unique();
+
+        $lastDoneByUser = WalletDepositInquiry::query()
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
+            ->where('status', 'done')
+            ->selectRaw('user_id, MAX(updated_at) as last_done')
+            ->groupBy('user_id')
+            ->pluck('last_done', 'user_id');
+
+        $inquiryUserIds = WalletDepositInquiry::query()
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
+            ->distinct()
+            ->pluck('user_id');
+
+        $collegeStudentIds = DB::table('users')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
             ->where('role', 'student')
-            ->select('id', 'name', 'email', 'college', 'wallet_balance')
-            ->get()
-            ->map(function($student) {
-                // Get total spent by this student
-                $totalSpent = Order::where('user_id', $student->id)->sum('total');
+            ->pluck('id');
 
-                return (object)[
-                    'id' => $student->id,
-                    'name' => $student->name,
-                    'email' => $student->email,
-                    'college' => $student->college,
-                    'balance' => $student->wallet_balance, // Get balance from database
-                    'total_spent' => $totalSpent,
-                ];
-            });
+        $allIds = $collegeStudentIds->merge($inquiryUserIds)->unique()->sort()->values();
+
+        $students = collect();
+        foreach ($allIds as $userId) {
+            $row = DB::table('users')
+                ->where('id', $userId)
+                ->where('role', 'student')
+                ->select('id', 'name', 'email', 'college', 'student_id')
+                ->first();
+            if (! $row) {
+                continue;
+            }
+
+            $assignedToCanteen = strtolower(trim((string) ($row->college ?? ''))) === $collegeCode;
+            $hasPending = $pendingUserIds->contains($userId);
+            $lastDone = $lastDoneByUser->get($userId);
+            $inquiryHistoryOnly = ! $assignedToCanteen && ! $hasPending && $lastDone !== null;
+
+            $students->push((object) [
+                'id' => $row->id,
+                'name' => $row->name,
+                'email' => $row->email,
+                'college' => $row->college,
+                'student_id' => $row->student_id,
+                'assigned_to_canteen' => $assignedToCanteen,
+                'has_pending_inquiry' => $hasPending,
+                'last_completed_inquiry_at' => $lastDone,
+                'inquiry_history_only' => $inquiryHistoryOnly,
+                'can_load_wallet' => $assignedToCanteen || $hasPending,
+            ]);
+        }
+
+        $students = $students->sortBy(fn ($s) => strtolower($s->name))->values();
 
         return view('Staff.quickaction.wallet', [
             'canteenName' => $canteenName,
             'collegeCode' => strtoupper($collegeCode),
             'students' => $students,
+            'depositInquiries' => $depositInquiries,
+            'walletLoadHistory' => $walletLoadHistory,
         ]);
     }
 
@@ -246,6 +445,22 @@ class DashboardController extends Controller
             'seat_number' => ['required', 'integer', 'between:1,25'],
         ]);
 
+        $reservation = DB::table('seat_reservations')
+            ->where('college', $collegeCode)
+            ->where('seat_number', $validated['seat_number'])
+            ->first();
+
+        if ($reservation) {
+            $label = config('canteens')[$collegeCode]['label'] ?? $collegeCode;
+            ActivityNotification::notifyUser(
+                (int) $reservation->user_id,
+                ActivityNotification::TYPE_SEAT_RELEASED,
+                'Seat reservation released',
+                'Staff released seat #'.$validated['seat_number'].' at '.$label.'.',
+                null
+            );
+        }
+
         DB::table('seat_reservations')
             ->where('college', $collegeCode)
             ->where('seat_number', $validated['seat_number'])
@@ -255,6 +470,27 @@ class DashboardController extends Controller
             ->with('status', 'seat-released');
     }
 
-    public function feedbacks() { return view('Staff.quickaction.feedbacks'); }
+    public function feedbacks()
+    {
+        $collegeCode = Auth::user()->college ?: 'ceit';
+        $catalog = config('canteens', []);
+        $canteenName = $catalog[$collegeCode]['label'] ?? 'Your canteen';
+
+        $feedbacks = CanteenFeedback::query()
+            ->where('college', $collegeCode)
+            ->with('user')
+            ->latest()
+            ->get();
+
+        $averageRating = CanteenFeedback::averageRatingForCollege($collegeCode);
+
+        return view('Staff.quickaction.feedbacks', [
+            'canteenName' => $canteenName,
+            'collegeCode' => $collegeCode,
+            'feedbacks' => $feedbacks,
+            'averageRating' => $averageRating,
+        ]);
+    }
+
     public function reports()   { return view('Staff.quickaction.reports'); }
 }

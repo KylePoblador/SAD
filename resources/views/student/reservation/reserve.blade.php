@@ -1,123 +1,109 @@
 @extends('layouts.app')
 
+@section('title', 'Reserve a seat')
+
 @section('content')
-
-<div class="container text-center mt-3">
-
-    <h4>Select your seat</h4>
-    @php
-        $totalSeats = 25;
-        $occupiedCount = count($occupied ?? []);
-        $availableCount = $totalSeats - $occupiedCount;
-    @endphp
-
-    <div class="d-flex justify-content-center gap-2 mb-3">
-        <span class="badge bg-success">Available: {{ $availableCount }}</span>
-        <span class="badge bg-danger">Occupied: {{ $occupiedCount }}</span>
-        <span class="badge bg-secondary">Total: {{ $totalSeats }}</span>
-    </div>
-
-    @if (session('error'))
-        <div class="alert alert-danger mt-3">{{ session('error') }}</div>
-    @endif
-
-    {{-- FILTER --}}
-    <div class="mb-3">
-        <button class="btn btn-secondary filter-btn" data-filter="all">All</button>
-        <button class="btn btn-outline-secondary filter-btn" data-filter="available">Available</button>
-        <button class="btn btn-outline-danger filter-btn" data-filter="occupied">Occupied</button>
-        <button class="btn btn-outline-success filter-btn" data-filter="selected">Selected</button>
-    </div>
-
-    {{-- SEATS --}}
-    <div class="d-flex flex-wrap justify-content-center">
-
+    <div class="text-center">
+        <h1 class="text-lg font-bold text-gray-900">Select your seat</h1>
         @php
-            $occupied = $occupied ?? [];
+            $totalSeats = 25;
+            $occupiedCount = count($occupied ?? []);
+            $availableCount = $totalSeats - $occupiedCount;
         @endphp
 
-        @for ($i = 1; $i <= 25; $i++)
-            <div
-                class="seat m-2 {{ in_array($i,$occupied) ? 'occupied' : 'available' }}"
-                data-seat="{{ $i }}"
-            >
-                {{ $i }}
-            </div>
-        @endfor
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
+            <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">Available:
+                {{ $availableCount }}</span>
+            <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">Occupied:
+                {{ $occupiedCount }}</span>
+            <span class="rounded-full bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-700">Total:
+                {{ $totalSeats }}</span>
+        </div>
 
+        @if (session('error'))
+            <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {{ session('error') }}
+            </div>
+        @endif
+
+        <div class="mt-6 flex flex-wrap justify-center gap-2">
+            <button type="button"
+                class="filter-btn rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                data-filter="all">All</button>
+            <button type="button"
+                class="filter-btn rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                data-filter="available">Available</button>
+            <button type="button"
+                class="filter-btn rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                data-filter="occupied">Occupied</button>
+            <button type="button"
+                class="filter-btn rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                data-filter="selected">Selected</button>
+        </div>
+
+        <div class="mt-6 flex flex-wrap justify-center gap-2">
+            @php
+                $occupied = $occupied ?? [];
+            @endphp
+            @for ($i = 1; $i <= 25; $i++)
+                <div class="seat m-1 flex h-14 w-14 cursor-pointer items-center justify-center rounded-xl border-2 text-sm font-bold transition {{ in_array($i, $occupied) ? 'cursor-not-allowed border-red-300 bg-red-100 text-red-900' : 'border-gray-200 bg-gray-100 text-gray-800' }}"
+                    data-seat="{{ $i }}">
+                    {{ $i }}
+                </div>
+            @endfor
+        </div>
+
+        <form action="{{ route('student.confirm.seat') }}" method="POST" class="mt-8">
+            @csrf
+            <input type="hidden" name="college" value="{{ $college }}">
+            <input type="hidden" name="seat" id="seatInput">
+
+            <button type="submit"
+                class="rounded-xl bg-green-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
+                Confirm seat
+            </button>
+        </form>
     </div>
 
-    {{-- FORM --}}
-    <form action="{{ route('student.confirm.seat') }}" method="POST">
-        @csrf
-        <input type="hidden" name="college" value="{{ $college }}">
-        <input type="hidden" name="seat" id="seatInput">
-
-        <button class="btn btn-success mt-4 px-5">
-            Confirm Seat
-        </button>
-    </form>
-
-</div>
-
-<style>
-.seat{
-    width:60px;
-    height:60px;
-    line-height:60px;
-    border-radius:10px;
-    cursor:pointer;
-    font-weight:bold;
-}
-
-.available{ background:#ddd; }
-.occupied{ background:#e57373; cursor:not-allowed; }
-.selected{ background:#22c55e; color:#fff; }
-</style>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-
-    let selected = null;
-
-    document.querySelectorAll('.seat').forEach(seat => {
-        seat.onclick = () => {
-
-            if(seat.classList.contains('occupied')) return;
-
-            document.querySelectorAll('.seat').forEach(s => s.classList.remove('selected'));
-
-            seat.classList.add('selected');
-            selected = seat.dataset.seat;
-
-            document.getElementById('seatInput').value = selected;
-        }
-    });
-
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.onclick = () => {
-
-            let filter = btn.dataset.filter;
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let selected = null;
 
             document.querySelectorAll('.seat').forEach(seat => {
-                seat.style.display = 'block';
+                seat.addEventListener('click', () => {
+                    if (seat.classList.contains('cursor-not-allowed')) return;
 
-                if(filter === 'available' && !seat.classList.contains('available')){
-                    seat.style.display = 'none';
-                }
+                    document.querySelectorAll('.seat').forEach(s => {
+                        if (!s.classList.contains('cursor-not-allowed')) {
+                            s.classList.remove('border-green-600', 'bg-green-600', 'text-white', 'seat-picked');
+                            s.classList.add('border-gray-200', 'bg-gray-100', 'text-gray-800');
+                        }
+                    });
 
-                if(filter === 'occupied' && !seat.classList.contains('occupied')){
-                    seat.style.display = 'none';
-                }
-
-                if(filter === 'selected' && !seat.classList.contains('selected')){
-                    seat.style.display = 'none';
-                }
+                    seat.classList.remove('border-gray-200', 'bg-gray-100', 'text-gray-800');
+                    seat.classList.add('border-green-600', 'bg-green-600', 'text-white', 'seat-picked');
+                    selected = seat.dataset.seat;
+                    document.getElementById('seatInput').value = selected;
+                });
             });
-        }
-    });
 
-});
-</script>
-
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const filter = btn.dataset.filter;
+                    document.querySelectorAll('.seat').forEach(seat => {
+                        seat.style.display = 'flex';
+                        if (filter === 'available' && seat.classList.contains('cursor-not-allowed')) {
+                            seat.style.display = 'none';
+                        }
+                        if (filter === 'occupied' && !seat.classList.contains('cursor-not-allowed')) {
+                            seat.style.display = 'none';
+                        }
+                        if (filter === 'selected' && !seat.classList.contains('seat-picked')) {
+                            seat.style.display = 'none';
+                        }
+                    });
+                });
+            });
+        });
+    </script>
 @endsection

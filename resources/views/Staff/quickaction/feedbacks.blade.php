@@ -1,201 +1,37 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Customer Feedbacks</title>
-
-    <style>
-        body{
-            font-family: Arial, sans-serif;
-            background:#f2f2f2;
-            margin:0;
-        }
-
-        .header{
-            background:#ec4899;
-            color:white;
-            padding:20px;
-        }
-
-        .header h1{ margin:0; }
-
-        .back{
-            font-size:14px;
-            margin-bottom:10px;
-            display:inline-block;
-            color:white;
-            text-decoration:none;
-        }
-
-        .container{
-            padding:20px;
-            max-width:600px;
-            margin:0 auto;
-        }
-
-        .rating-summary{
-            background:white;
-            padding:20px;
-            border-radius:10px;
-            margin-bottom:20px;
-            text-align:center;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .rating-value{
-            font-size:48px;
-            font-weight:bold;
-            color:#fbbf24;
-            margin-bottom:10px;
-        }
-
-        .rating-count{
-            color:#666;
-            font-size:14px;
-        }
-
-        .feedback-item{
-            background:white;
-            padding:15px;
-            border-radius:10px;
-            margin-bottom:15px;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .feedback-header{
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            margin-bottom:10px;
-        }
-
-        .feedback-user{
-            font-weight:bold;
-            color:#333;
-        }
-
-        .feedback-rating{
-            color:#fbbf24;
-            font-size:14px;
-        }
-
-        .feedback-date{
-            color:#999;
-            font-size:12px;
-            margin-bottom:8px;
-        }
-
-        .feedback-text{
-            color:#666;
-            line-height:1.5;
-            font-size:14px;
-        }
-
-        .stars{
-            color:#fbbf24;
-            font-size:14px;
-            letter-spacing:2px;
-        }
-
-        .filter-btn{
-            background:#f3f4f6;
-            border:1px solid #ddd;
-            padding:8px 16px;
-            border-radius:6px;
-            cursor:pointer;
-            margin-bottom:20px;
-            transition:all 0.3s ease;
-        }
-
-        .filter-btn:hover{
-            background:#e5e7eb;
-        }
-
-        .filter-btn.active{
-            background:#ec4899;
-            color:white;
-            border-color:#ec4899;
-        }
-    </style>
-</head>
-
-<body>
-
-<div class="header">
-    <a href="{{ route('staff.dashboard') }}" class="back">← Back to Dashboard</a>
-    <h1>Customer Feedbacks</h1>
-</div>
-
-<div class="container">
-
-    <div class="rating-summary">
-        <div class="rating-value">4.5</div>
-        <div class="stars">★★★★☆</div>
-        <div class="rating-count">Based on 48 reviews</div>
+<x-layouts.staff-subpage title="Customer feedbacks" :subtitle="$canteenName">
+    <div class="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-4 shadow-sm">
+        <p class="text-xs font-semibold uppercase tracking-wide text-violet-700/80">Average rating</p>
+        <p class="mt-1 text-3xl font-bold text-violet-900">★ {{ $averageRating }}</p>
+        <p class="mt-2 text-xs text-gray-600">Based on student feedback for <strong>{{ strtoupper($collegeCode) }}</strong>.
+            Shows <strong>0.0</strong> until someone submits a rating (e.g. after orders).</p>
     </div>
 
-    <div style="margin-bottom:20px; text-align:center;">
-        <button class="filter-btn active">All (48)</button>
-        <button class="filter-btn">5 Stars (28)</button>
-        <button class="filter-btn">4 Stars (15)</button>
-        <button class="filter-btn">Below 4 (5)</button>
-    </div>
+    <p class="text-sm font-bold text-gray-800">All feedback</p>
 
-    <div class="feedback-item">
-        <div class="feedback-header">
-            <span class="feedback-user">Maria Santos</span>
-            <span class="feedback-rating">★★★★★</span>
+    @forelse ($feedbacks as $fb)
+        <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <p class="font-semibold text-gray-900">{{ $fb->user->name ?? 'Student' }}</p>
+                    <p class="text-xs text-gray-500">{{ $fb->created_at->format('M d, Y · g:i A') }}</p>
+                </div>
+                <span
+                    class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">
+                    {{ $fb->rating }}/5
+                </span>
+            </div>
+            @if ($fb->comment)
+                <p class="mt-3 text-sm leading-relaxed text-gray-700">{{ $fb->comment }}</p>
+            @else
+                <p class="mt-2 text-xs italic text-gray-400">No written comment.</p>
+            @endif
         </div>
-        <div class="feedback-date">Apr 10, 2:30 PM</div>
-        <div class="feedback-text">
-            "Excellent food quality and very fast service! The staff was so friendly and accommodating. Highly recommended!"
+    @empty
+        <div
+            class="rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 px-5 py-10 text-center text-sm text-violet-900/80">
+            <p class="font-medium text-violet-900">No feedback yet</p>
+            <p class="mt-1 text-violet-800/75">Ratings will appear here once students can leave feedback (linked to
+                completed orders). Your dashboard rating stays at <strong>0.0</strong> until then.</p>
         </div>
-    </div>
-
-    <div class="feedback-item">
-        <div class="feedback-header">
-            <span class="feedback-user">John Reyes</span>
-            <span class="feedback-rating">★★★★☆</span>
-        </div>
-        <div class="feedback-date">Apr 09, 1:15 PM</div>
-        <div class="feedback-text">
-            "Good food and reasonable prices. Would be perfect if they had more variety in the menu."
-        </div>
-    </div>
-
-    <div class="feedback-item">
-        <div class="feedback-header">
-            <span class="feedback-user">Anna Cruz</span>
-            <span class="feedback-rating">★★★★★</span>
-        </div>
-        <div class="feedback-date">Apr 08, 12:45 PM</div>
-        <div class="feedback-text">
-            "The chicken adobo is delicious! Fresh ingredients and consistent quality every time I order."
-        </div>
-    </div>
-
-    <div class="feedback-item">
-        <div class="feedback-header">
-            <span class="feedback-user">Paul Mercado</span>
-            <span class="feedback-rating">★★★☆☆</span>
-        </div>
-        <div class="feedback-date">Apr 07, 3:20 PM</div>
-        <div class="feedback-text">
-            "Average experience. The food was okay but a bit salty. The service could be faster during lunch rush."
-        </div>
-    </div>
-
-    <div class="feedback-item">
-        <div class="feedback-header">
-            <span class="feedback-user">Lisa Tan</span>
-            <span class="feedback-rating">★★★★★</span>
-        </div>
-        <div class="feedback-date">Apr 06, 11:30 AM</div>
-        <div class="feedback-text">
-            "Best canteen in campus! Always fresh, clean, and the staff really care about customer satisfaction."
-        </div>
-    </div>
-
-</div>
-
-</body>
-</html>
+    @endforelse
+</x-layouts.staff-subpage>

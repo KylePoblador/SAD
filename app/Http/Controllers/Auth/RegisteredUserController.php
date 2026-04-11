@@ -8,6 +8,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class RegisteredUserController extends Controller
@@ -19,20 +20,57 @@ class RegisteredUserController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
-            'name'     => ['required', 'string', 'max:255'],
-            'email'    => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+        $collegeKeys = array_keys(config('canteens', []));
+
+        $base = [
+            'name' => ['required', 'string', 'max:255'],
             'password' => ['required', 'confirmed', 'min:8'],
-            'role'     => ['nullable', 'in:student,staff'],
-            'college'  => ['nullable', 'required_if:role,staff', 'in:ceit,cass,chefs,cti'],
-        ]);
+            'role' => ['required', 'in:student,staff'],
+            'college' => ['required', 'string', Rule::in($collegeKeys)],
+            'terms_accepted' => ['accepted'],
+        ];
+
+        $role = $request->input('role');
+
+        if ($role === 'staff') {
+            $request->validate(array_merge($base, [
+                'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+                'canteen_name' => ['required', 'string', 'max:255'],
+                'phone' => ['prohibited'],
+                'student_id' => ['prohibited'],
+            ]));
+        } else {
+            $request->validate(
+                array_merge($base, [
+                    'email' => [
+                        'required',
+                        'string',
+                        'lowercase',
+                        'email',
+                        'max:255',
+                        'unique:'.User::class,
+                        'regex:/^[^@\s]+@usm\.edu\.ph$/',
+                    ],
+                    'phone' => ['required', 'string', 'max:32'],
+                    'student_id' => ['required', 'string', 'max:64', 'unique:users,student_id'],
+                    'canteen_name' => ['prohibited'],
+                ]),
+                [
+                    'email.regex' => 'Use your official USM email address ending with @usm.edu.ph.',
+                ]
+            );
+        }
 
         $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
+            'name' => $request->name,
+            'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role'     => $request->input('role', 'student'),
-            'college'  => $request->input('college'),
+            'role' => $role,
+            'college' => $request->input('college'),
+            'wallet_balance' => 0,
+            'phone' => $role === 'student' ? $request->input('phone') : null,
+            'student_id' => $role === 'student' ? $request->input('student_id') : null,
+            'canteen_name' => $role === 'staff' ? $request->input('canteen_name') : null,
         ]);
 
         event(new Registered($user));

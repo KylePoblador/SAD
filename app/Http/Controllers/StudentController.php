@@ -2,28 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Models\ActivityNotification;
+use App\Models\CanteenFeedback;
+use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\UserCanteenBalance;
+use App\Models\WalletDepositInquiry;
+use App\Models\WalletLoadLog;
+use App\Services\InAppNotificationFeed;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
 {
     public function index()
     {
         $user = auth()->user();
+        $catalog = config('canteens', []);
 
-        $baseCanteens = [
-            'ceit' => ['name' => 'CEIT Canteen', 'dist' => '50m', 'rating' => '4.5'],
-            'cass' => ['name' => 'CASS Food Hub', 'dist' => '120m', 'rating' => '4.2'],
-            'chefs' => ['name' => 'CHEFS Dining', 'dist' => '200m', 'rating' => '4.8'],
-            'cti' => ['name' => 'CTI Canteen', 'dist' => '20m', 'rating' => '4.1'],
-            'cbdem' => ['name' => 'CBDEM Snack Bar', 'dist' => '180m', 'rating' => '4.3'],
-        ];
-
-        $staffByCollege = User::where('role', 'staff')
+        $staffByCollege = User::query()
+            ->where('role', 'staff')
             ->whereNotNull('college')
-            ->whereIn('college', array_keys($baseCanteens))
+            ->whereIn('college', array_keys($catalog))
             ->get()
             ->groupBy('college');
 
@@ -35,7 +37,7 @@ class StudentController extends Controller
         $totalSeats = 25;
         $canteens = [];
 
-        foreach ($baseCanteens as $college => $canteenInfo) {
+        foreach ($catalog as $college => $canteenInfo) {
             $staffCollection = $staffByCollege[$college] ?? collect();
             if ($staffCollection->isEmpty()) {
                 continue;
@@ -44,20 +46,17 @@ class StudentController extends Controller
             $occupied = (int) ($occupiedMap[$college] ?? 0);
             $available = max($totalSeats - $occupied, 0);
 
-            $staffNames = $staffCollection->pluck('name')
-                ->filter()
-                ->values()
-                ->all();
+            $staffNames = $staffCollection->pluck('name')->filter()->values()->all();
 
             $staffLabel = count($staffNames) > 2
                 ? $staffNames[0] . ', ' . $staffNames[1] . ' +' . (count($staffNames) - 2) . ' more'
                 : implode(', ', $staffNames);
 
             $canteens[] = [
-                'name' => $canteenInfo['name'],
+                'name' => $canteenInfo['label'],
                 'college' => $college,
                 'dist' => $canteenInfo['dist'],
-                'rating' => $canteenInfo['rating'],
+                'rating' => CanteenFeedback::averageRatingForCollege($college),
                 'seats' => $available . '/' . $totalSeats,
                 'full' => $available === 0,
                 'staff_names' => $staffLabel,
@@ -65,15 +64,66 @@ class StudentController extends Controller
             ];
         }
 
+        $orders = Order::where('user_id', $user->id)->get();
+        $activeStatuses = ['pending', 'preparing', 'ready'];
+        $activeOrdersCount = $orders->whereIn('status', $activeStatuses)->count();
+        $totalOrdersCount = $orders->count();
+
+        $activeOrder = Order::where('user_id', $user->id)
+            ->whereIn('status', $activeStatuses)
+            ->orderByDesc('created_at')
+            ->first();
+
         return view('student.dashboard', [
             'canteens' => $canteens,
-            'walletBalance' => $user->wallet_balance,
+            'activeOrdersCount' => $activeOrdersCount,
+            'totalOrdersCount' => $totalOrdersCount,
+            'activeOrder' => $activeOrder,
+        ]);
+    }
+
+    public function showCanteen(string $college)
+    {
+        $catalog = config('canteens', []);
+        if (! array_key_exists($college, $catalog)) {
+            abort(404);
+        }
+
+        $totalSeats = 25;
+        $occupiedCount = DB::table('seat_reservations')
+            ->where('college', $college)
+            ->count();
+        $availableSeats = max($totalSeats - $occupiedCount, 0);
+        $reservedSeat = DB::table('seat_reservations')
+            ->where('college', $college)
+            ->where('user_id', auth()->id())
+            ->value('seat_number');
+
+        $menuItems = MenuItem::query()
+            ->where('college', $college)
+            ->where('is_available', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        return view('student.canteen.show', [
+            'college' => $college,
+            'canteenName' => $catalog[$college]['label'],
+            'totalSeats' => $totalSeats,
+            'occupiedCount' => $occupiedCount,
+            'availableSeats' => $availableSeats,
+            'reservedSeat' => $reservedSeat,
+            'hasReservedSeat' => $reservedSeat !== null,
+            'menuItems' => $menuItems,
+            'walletBalance' => UserCanteenBalance::balanceFor((int) auth()->id(), $college),
         ]);
     }
 
     public function profile()
     {
-        return view('student.profile');
+        return view('student.profile', [
+            'canteenCatalog' => config('canteens', []),
+        ]);
     }
 
     public function notifications()
@@ -83,51 +133,12 @@ class StudentController extends Controller
 
     public function notificationData()
     {
-        $orders = Order::where('user_id', auth()->id())
-            ->orderBy('created_at', 'desc')
-            ->take(5)
-            ->get();
-
-        $notifications = $orders->map(function (Order $order) {
-            $statusText = match ($order->status) {
-                'pending' => 'is pending confirmation',
-                'preparing' => 'is being prepared',
-                'ready' => 'is ready for pickup',
-                'completed' => 'has been completed',
-                default => 'was updated',
-            };
-
-            return [
-                'id' => $order->id,
-                'title' => "Order {$order->order_number} {$statusText}",
-                'message' => "Total: ₱{$order->total}",
-                'time' => $order->created_at->diffForHumans(),
-                'status' => $order->status,
-                'is_read' => $order->is_read,
-            ];
-        });
-
-        if ($notifications->isEmpty()) {
-            return response()->json([
-                'notifications' => [
-                    [
-                        'id' => null,
-                        'title' => 'No notifications yet',
-                        'message' => 'Place an order to receive real-time updates here.',
-                        'time' => '',
-                        'status' => 'empty',
-                        'is_read' => true,
-                    ],
-                ],
-                'unread_count' => 0,
-            ]);
-        }
-
-        $unreadCount = $orders->sum(fn($order) => $order->is_read ? 0 : 1);
+        $userId = auth()->id();
+        $notifications = InAppNotificationFeed::studentItems($userId);
 
         return response()->json([
             'notifications' => $notifications,
-            'unread_count' => $unreadCount,
+            'unread_count' => InAppNotificationFeed::studentUnreadCount($userId),
         ]);
     }
 
@@ -135,40 +146,18 @@ class StudentController extends Controller
     {
         return response()->stream(function () {
             while (true) {
-                $orders = Order::where('user_id', auth()->id())
-                    ->orderBy('created_at', 'desc')
-                    ->take(5)
-                    ->get();
+                $userId = auth()->id();
+                $notifications = InAppNotificationFeed::studentItems($userId);
+                $unreadCount = InAppNotificationFeed::studentUnreadCount($userId);
 
-                $notifications = $orders->map(function (Order $order) {
-                    $statusText = match ($order->status) {
-                        'pending' => 'is pending confirmation',
-                        'preparing' => 'is being prepared',
-                        'ready' => 'is ready for pickup',
-                        'completed' => 'has been completed',
-                        default => 'was updated',
-                    };
-
-                    return [
-                        'id' => $order->id,
-                        'title' => "Order {$order->order_number} {$statusText}",
-                        'message' => "Total: ₱{$order->total}",
-                        'time' => $order->created_at->diffForHumans(),
-                        'status' => $order->status,
-                        'is_read' => $order->is_read,
-                    ];
-                });
-
-                $unreadCount = $orders->sum(fn($order) => $order->is_read ? 0 : 1);
-
-                echo "data: " . json_encode([
+                echo 'data: '.json_encode([
                     'notifications' => $notifications,
                     'unread_count' => $unreadCount,
-                ]) . "\n\n";
+                ])."\n\n";
 
                 ob_flush();
                 flush();
-                sleep(3); // Real-time updates every 3 seconds
+                sleep(3);
             }
         }, 200, [
             'Content-Type' => 'text/event-stream',
@@ -177,74 +166,110 @@ class StudentController extends Controller
         ]);
     }
 
-    public function markNotificationAsRead($orderId)
+    public function markNotificationRead(Request $request)
     {
-        $order = Order::where('id', $orderId)
-            ->where('user_id', auth()->id())
-            ->first();
+        $validated = $request->validate([
+            'nid' => ['required', 'string', 'regex:/^(o|a):[1-9][0-9]*$/'],
+        ]);
 
-        if ($order) {
-            $order->update(['is_read' => true]);
-        }
+        InAppNotificationFeed::markStudentRead(auth()->id(), $validated['nid']);
 
         return response()->json(['success' => true]);
     }
 
+    public function markAllNotificationsRead()
+    {
+        InAppNotificationFeed::markAllStudentRead((int) auth()->id());
+
+        return response()->json([
+            'success' => true,
+            'notifications' => InAppNotificationFeed::studentItems((int) auth()->id()),
+            'unread_count' => InAppNotificationFeed::studentUnreadCount((int) auth()->id()),
+        ]);
+    }
+
+    public function clearAllNotifications()
+    {
+        InAppNotificationFeed::clearStudentNotificationFeed((int) auth()->id());
+
+        return response()->json([
+            'success' => true,
+            'notifications' => InAppNotificationFeed::studentItems((int) auth()->id()),
+            'unread_count' => InAppNotificationFeed::studentUnreadCount((int) auth()->id()),
+        ]);
+    }
+
     public function unreadNotificationCount()
     {
-        $count = Order::where('user_id', auth()->id())
-            ->where('is_read', false)
-            ->count();
-
-        return response()->json(['unread_count' => $count]);
+        return response()->json([
+            'unread_count' => InAppNotificationFeed::studentUnreadCount(auth()->id()),
+        ]);
     }
 
     public function updateProfile(Request $request)
     {
-        $request->user()->update([
-            'name'  => $request->name,
-            'email' => $request->email,
+        if ($request->input('college') === '') {
+            $request->merge(['college' => null]);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255'],
+            'college' => ['nullable', 'string', Rule::in(array_keys(config('canteens', [])))],
+            'avatar' => ['nullable', 'image', 'max:5000'],
         ]);
+
+        $user = $request->user();
+        $data = [
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'college' => $validated['college'],
+        ];
+
+        $avatarPath = $this->storePublicUserAvatar($request, $user);
+        if ($avatarPath !== null) {
+            $data['avatar_path'] = $avatarPath;
+        }
+
+        $user->update($data);
 
         return redirect()->route('student.profile')->with('status', 'profile-updated');
     }
 
     public function orders()
     {
-        $canteens = [
-            1 => 'CEIT Canteen',
-            2 => 'CASS Food Hub',
-            3 => 'CHEFS Dining',
-            4 => 'CTI Canteen',
-            5 => 'CBDEM Snack Bar',
-        ];
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
 
         $orders = Order::where('user_id', auth()->id())
             ->with('items')
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($order) use ($canteens) {
-                $order->canteen = $canteens[$order->canteen_id] ?? 'Unknown Canteen';
+            ->map(function ($order) use ($labels) {
+                $cid = $order->canteen_id;
+                $order->canteen = $labels[$cid] ?? (is_string($cid) ? strtoupper($cid) : 'Canteen');
+
                 return $order;
             });
 
+        $walletBalance = UserCanteenBalance::totalForUser((int) auth()->id());
+
         return view('student.order', [
             'orders' => $orders,
+            'walletBalance' => $walletBalance,
+            'activeOrdersCount' => $orders->whereIn('status', ['pending', 'preparing', 'ready'])->count(),
+            'totalOrdersCount' => $orders->count(),
         ]);
     }
 
     public function wallet()
     {
-        $user = auth()->user();
+        $user = auth()->user()->fresh();
 
-        // Get orders for this student to calculate statistics
         $orders = Order::where('user_id', $user->id)->get();
 
-        // Calculate wallet data
         $totalSpent = $orders->sum('total');
         $totalOrders = $orders->count();
 
-        // Get recent transactions from orders
         $recentTransactions = $orders->sortByDesc('created_at')
             ->take(10)
             ->map(function ($order) {
@@ -258,9 +283,38 @@ class StudentController extends Controller
             ->values()
             ->toArray();
 
+        $collegeLabel = null;
+        if ($user->college && isset(config('canteens')[$user->college])) {
+            $collegeLabel = config('canteens')[$user->college]['label'];
+        }
+
+        $catalog = config('canteens', []);
+        $topUpSlugs = collect($this->topUpCanteenOptions())->pluck('slug')->all();
+        $extraSlugs = UserCanteenBalance::query()
+            ->where('user_id', $user->id)
+            ->where('balance', '>', 0)
+            ->pluck('college')
+            ->all();
+        $allSlugs = collect($topUpSlugs)->merge($extraSlugs)->unique()->sort()->values()->all();
+
+        $canteenBalances = [];
+        foreach ($allSlugs as $slug) {
+            if (! isset($catalog[$slug])) {
+                continue;
+            }
+            $canteenBalances[] = [
+                'slug' => $slug,
+                'label' => $catalog[$slug]['label'],
+                'balance' => UserCanteenBalance::balanceFor((int) $user->id, $slug),
+            ];
+        }
+
+        $totalBalance = UserCanteenBalance::totalForUser((int) $user->id);
+
         $wallet = [
-            'balance' => $user->wallet_balance,
-            'college' => $user->college,
+            'balance' => $totalBalance,
+            'college' => $collegeLabel,
+            'canteen_balances' => $canteenBalances,
             'total_spent' => $totalSpent,
             'total_orders' => $totalOrders,
             'recent_transactions' => $recentTransactions,
@@ -268,46 +322,181 @@ class StudentController extends Controller
 
         return view('student.wallet', [
             'wallet' => $wallet,
+            'topUpCanteens' => $this->topUpCanteenOptions(),
         ]);
+    }
+
+    /**
+     * Canteens that have at least one staff account (same rule as student browse list).
+     *
+     * @return array<int, array{slug: string, label: string, dist: string}>
+     */
+    protected function topUpCanteenOptions(): array
+    {
+        $catalog = config('canteens', []);
+        $staffColleges = User::query()
+            ->where('role', 'staff')
+            ->whereNotNull('college')
+            ->pluck('college')
+            ->map(fn ($c) => strtolower(trim((string) $c)))
+            ->unique()
+            ->values()
+            ->all();
+
+        $options = [];
+        foreach ($staffColleges as $slug) {
+            if (! isset($catalog[$slug])) {
+                continue;
+            }
+            $options[] = [
+                'slug' => $slug,
+                'label' => $catalog[$slug]['label'],
+                'dist' => $catalog[$slug]['dist'] ?? '',
+            ];
+        }
+        usort($options, fn ($a, $b) => strcmp($a['label'], $b['label']));
+
+        return $options;
+    }
+
+    public function storeWalletDepositInquiry(Request $request)
+    {
+        $allowedSlugs = collect($this->topUpCanteenOptions())->pluck('slug')->all();
+
+        $validated = $request->validate([
+            'college' => ['required', 'string', Rule::in($allowedSlugs)],
+            'intended_amount' => ['nullable', 'numeric', 'min:1', 'max:999999.99'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $inquiry = WalletDepositInquiry::create([
+            'user_id' => $request->user()->id,
+            'college' => strtolower($validated['college']),
+            'intended_amount' => isset($validated['intended_amount']) ? $validated['intended_amount'] : null,
+            'note' => $validated['note'] ?? null,
+            'status' => 'pending',
+        ]);
+
+        $label = config('canteens')[$validated['college']]['label'] ?? $validated['college'];
+        $student = $request->user();
+
+        $studentBody = 'Canteen: '.$label.'. ';
+        if ($inquiry->intended_amount !== null) {
+            $studentBody .= 'Planned amount: ₱'.number_format((float) $inquiry->intended_amount, 2).'. ';
+        }
+        $studentBody .= 'Go to the counter and pay cash — staff can see your inquiry.';
+
+        ActivityNotification::notifyUser(
+            $student->id,
+            ActivityNotification::TYPE_DEPOSIT_INQUIRY_STUDENT,
+            'Wallet top-up request sent',
+            $studentBody,
+            $inquiry->id
+        );
+
+        $staffBody = $student->name.' requested a wallet deposit.';
+        if ($inquiry->intended_amount !== null) {
+            $staffBody .= ' Planned: ₱'.number_format((float) $inquiry->intended_amount, 2).'.';
+        }
+        if (! empty($inquiry->note)) {
+            $staffBody .= ' Note: '.$inquiry->note;
+        }
+
+        ActivityNotification::notifyStaffOfCollege(
+            strtolower($validated['college']),
+            ActivityNotification::TYPE_DEPOSIT_INQUIRY_STAFF,
+            'New wallet deposit inquiry',
+            $staffBody,
+            $inquiry->id
+        );
+
+        return redirect()
+            ->route('student.wallet')
+            ->with('status', 'deposit-inquiry-sent')
+            ->with('deposit_target', $label)
+            ->with('deposit_college_slug', $validated['college']);
     }
 
     public function updateWalletBalance(Request $request, $studentId)
     {
         $user = auth()->user();
 
-        // Only staff can update wallets
         if ($user->role !== 'staff') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Get the student
-        $student = \App\Models\User::find($studentId);
+        $student = User::find($studentId);
 
-        if (!$student) {
+        if (! $student) {
             return response()->json(['error' => 'Student not found'], 404);
         }
 
-        // Only allow updating students from the same canteen
-        if ($student->college !== $user->college) {
-            return response()->json(['error' => 'Cannot update student from different canteen'], 403);
+        $staffCollege = $user->college ? strtolower(trim((string) $user->college)) : 'ceit';
+        $studentCollege = strtolower(trim((string) ($student->college ?? '')));
+
+        $assignedToCanteen = $studentCollege === $staffCollege;
+        $hasPendingInquiry = WalletDepositInquiry::query()
+            ->where('user_id', $student->id)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$staffCollege])
+            ->where('status', 'pending')
+            ->exists();
+
+        if (! $assignedToCanteen && ! $hasPendingInquiry) {
+            return response()->json([
+                'error' => 'This student has no pending deposit request for your canteen. They can submit a new request from Wallet.',
+            ], 403);
         }
 
-        $amount = $request->input('amount');
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
+        ]);
 
-        if (!$amount || $amount <= 0) {
-            return response()->json(['error' => 'Invalid amount'], 400);
+        $amount = (float) $validated['amount'];
+
+        $newCanteenBalance = UserCanteenBalance::add((int) $student->id, $staffCollege, $amount);
+        $student->refresh();
+
+        WalletLoadLog::query()->create([
+            'student_user_id' => $student->id,
+            'staff_user_id' => $user->id,
+            'college' => $staffCollege,
+            'amount' => $amount,
+        ]);
+
+        $closedCount = WalletDepositInquiry::query()
+            ->where('user_id', $student->id)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$staffCollege])
+            ->where('status', 'pending')
+            ->update(['status' => 'done']);
+
+        $canteenLabel = config('canteens')[$staffCollege]['label'] ?? $staffCollege;
+        $totalBalance = UserCanteenBalance::totalForUser((int) $student->id);
+
+        if ($closedCount > 0) {
+            ActivityNotification::notifyUser(
+                $student->id,
+                ActivityNotification::TYPE_DEPOSIT_INQUIRY_DONE,
+                'Deposit inquiry completed',
+                '₱'.number_format($amount, 2).' was added to your '.$canteenLabel.' wallet. Balance there: ₱'.number_format($newCanteenBalance, 2).'. Total all canteens: ₱'.number_format($totalBalance, 2).'.',
+                null
+            );
         }
 
-        // Update wallet balance
-        $student->wallet_balance += $amount;
-        $student->save();
+        ActivityNotification::notifyUser(
+            $student->id,
+            ActivityNotification::TYPE_WALLET_LOADED,
+            'Wallet loaded',
+            $user->name.' added ₱'.number_format($amount, 2).' to your '.$canteenLabel.' wallet. '.$canteenLabel.': ₱'.number_format($newCanteenBalance, 2).' · Total: ₱'.number_format($totalBalance, 2).'.',
+            null
+        );
 
         return response()->json([
             'success' => true,
-            'new_balance' => $student->wallet_balance,
-            'message' => 'Wallet updated successfully'
+            'new_balance' => $totalBalance,
+            'new_canteen_balance' => $newCanteenBalance,
+            'canteen' => $staffCollege,
+            'inquiries_closed' => $closedCount,
+            'message' => 'Wallet updated successfully',
         ]);
     }
 }
-
-

@@ -1,283 +1,131 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>CoinMeal - My Orders</title>
-
-    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet" />
-
-    @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @else
-        <script src="https://cdn.tailwindcss.com"></script>
-    @endif
-
-    <style>
-        body {
-            font-family: 'Figtree', sans-serif;
-            background: #f3f4f6;
-        }
-    </style>
-
-</head>
-
-
-<body class="min-h-screen bg-gray-100 pb-20">
-
-
-    {{-- HEADER --}}
-    <div class="bg-white px-4 py-3 flex items-center justify-between shadow-sm sticky top-0 z-10">
-
-        <div>
-            <h1 class="text-lg font-bold text-green-600">
-                CoinMeal
-            </h1>
-
-            <p class="text-xs text-gray-500">
-                University of Southern Mindanao
-            </p>
+<x-layouts.student title="My orders" active="orders">
+    <div class="relative overflow-hidden rounded-2xl bg-green-600 p-5 text-white shadow-sm">
+        <div class="mb-2 flex items-center justify-between">
+            <p class="text-sm font-medium opacity-90">Total balance (all canteens)</p>
         </div>
-
-
-        <div class="flex items-center gap-4">
-
-            {{-- notification --}}
-            <a href="{{ route('student.notification') }}" class="text-gray-500 hover:text-green-600 relative">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032
-2.032 0 0118 14.158V11a6 6
-0 10-12 0v3.159c0 .538-.214
-1.055-.595 1.436L4 17h5m6
-0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                <span id="unread-badge"
-                    class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold text-[10px]"
-                    style="display: none;">0</span>
+        <p class="mb-3 text-4xl font-bold">₱{{ number_format($walletBalance, 2) }}</p>
+        <div class="rounded-xl bg-green-500/90 px-4 py-3 text-xs opacity-95">
+            <p class="mb-2">Per-canteen balances show when you open that canteen. To add funds, use <strong>Load wallet</strong> on the Wallet page.</p>
+            <a href="{{ route('student.wallet') }}"
+                class="inline-flex w-full items-center justify-center rounded-lg bg-white/95 px-3 py-2 font-semibold text-green-700 shadow-sm hover:bg-white sm:w-auto">
+                Go to Wallet
             </a>
-
-
-            {{-- cart --}}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4
-M7 13l-1.5 6h13M7 13L5.4 5M10
-21a1 1 0 100-2 1 1 0 000
-2zm7 0a1 1 0 100-2 1 1 0
-000 2z" />
-
-            </svg>
-
         </div>
-
     </div>
 
-
-
-    <div class="max-w-lg mx-auto px-4 py-4 space-y-4">
-
-
-        {{-- WALLET --}}
-        <div class="bg-green-500 rounded-2xl p-5 text-white relative overflow-hidden">
-
-            <div class="flex items-center justify-between mb-2">
-
-                <p class="text-sm font-medium opacity-90">
-                    Available Balance
-                </p>
-
+    <div class="grid grid-cols-2 gap-3">
+        <div class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div>
+                <p class="text-xs text-gray-500">Active orders</p>
+                <p class="text-xl font-bold text-gray-800">{{ $activeOrdersCount }}</p>
             </div>
-
-            <p class="text-4xl font-bold mb-3">
-                ₱250.00
-            </p>
-
-
-            <div class="bg-green-400 rounded-xl px-4 py-2 text-xs opacity-90">
-
-                To top up your wallet,
-                visit any canteen counter
-                and deposit cash.
-
+        </div>
+        <div class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div>
+                <p class="text-xs text-gray-500">Total orders</p>
+                <p class="text-xl font-bold text-gray-800">{{ $totalOrdersCount }}</p>
             </div>
+        </div>
+    </div>
 
+    <div class="orders-container space-y-4">
+        <h2 class="text-base font-bold text-gray-800">My orders</h2>
+
+        <div class="mb-2 flex flex-wrap gap-2">
+            <button type="button" id="tab-all"
+                class="tab-button rounded-full bg-green-600 px-4 py-2 text-sm font-medium text-white"
+                data-filter="all">All</button>
+            <button type="button" id="tab-pending"
+                class="tab-button rounded-full bg-gray-200 px-4 py-2 text-sm font-medium text-gray-600"
+                data-filter="pending">Pending</button>
+            <button type="button" id="tab-completed"
+                class="tab-button rounded-full bg-gray-200 px-4 py-2 text-sm font-medium text-gray-600"
+                data-filter="completed">Completed</button>
         </div>
 
-
-
-        {{-- STATS --}}
-        <div class="grid grid-cols-2 gap-3">
-
-            <div class="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm">
-
-                <div>
-                    <p class="text-xs text-gray-500">
-                        Active Orders
-                    </p>
-
-                    <p class="text-xl font-bold text-gray-800">
-                        {{ $orders->where('status', '!=', 'completed')->count() }}
-                    </p>
-                </div>
-
-            </div>
-
-
-
-            <div class="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm">
-
-                <div>
-                    <p class="text-xs text-gray-500">
-                        Total Orders
-                    </p>
-
-                    <p class="text-xl font-bold text-gray-800">
-                        {{ $orders->count() }}
-                    </p>
-                </div>
-
-            </div>
-
-        </div>
-
-
-
-        {{-- ORDERS SECTION --}}
-        <div class="orders-container">
-
-            <h2 class="text-base font-bold text-gray-800 mb-3">
-
-                My Orders
-
-            </h2>
-
-            {{-- Tabs --}}
-            <div class="flex gap-2 mb-4">
-                <button id="tab-all" class="bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium tab-button active" data-filter="all">All</button>
-                <button id="tab-pending" class="bg-gray-200 text-gray-600 px-4 py-2 rounded-full text-sm font-medium tab-button" data-filter="pending">Pending</button>
-                <button id="tab-completed" class="bg-gray-200 text-gray-600 px-4 py-2 rounded-full text-sm font-medium tab-button" data-filter="completed">Completed</button>
-            </div>
-
-            {{-- Order Cards --}}
-            @forelse($orders as $order)
-            <div class="bg-white rounded-xl shadow-sm p-4 mb-3 order-card" data-status="{{ $order->status == 'completed' ? 'completed' : 'pending' }}">
-
-                {{-- Header --}}
-                <div class="flex justify-between items-center mb-2">
+        @forelse ($orders as $order)
+            <div class="order-card mb-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
+                data-status="{{ $order->status == 'completed' ? 'completed' : 'pending' }}">
+                <div class="mb-2 flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-semibold text-gray-800">ORD-{{ $order->id }}</p>
+                        <p class="text-sm font-semibold text-gray-800">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
                         <p class="text-xs text-gray-500">{{ $order->canteen }}</p>
                         <p class="text-xs text-gray-400">{{ $order->created_at->format('M d, Y H:i') }}</p>
                     </div>
-
-                    {{-- Status --}}
-                    @if($order->status == 'ready')
-                        <span class="bg-green-100 text-green-600 text-xs px-3 py-1 rounded-full font-medium">
-                            Ready for Pickup
-                        </span>
+                    @if ($order->status == 'ready')
+                        <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">Ready for
+                            pickup</span>
                     @elseif($order->status == 'preparing')
-                        <span class="bg-orange-100 text-orange-600 text-xs px-3 py-1 rounded-full font-medium">
-                            Preparing
-                        </span>
+                        <span
+                            class="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">Preparing</span>
+                    @elseif($order->status == 'completed')
+                        <span
+                            class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Completed</span>
                     @else
-                        <span class="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full font-medium">
-                            Completed
-                        </span>
+                        <span
+                            class="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-900">Pending</span>
                     @endif
                 </div>
 
-                <hr class="my-3">
+                <hr class="my-3 border-gray-100">
 
-                {{-- Items --}}
-                @foreach($order->items as $item)
-                <div class="flex justify-between text-sm py-1">
-                    <span class="text-gray-700">{{ $item->qty }}x {{ $item->name }}</span>
-                    <span class="text-gray-600">₱{{ number_format($item->price, 2) }}</span>
-                </div>
-                @endforeach
+                @forelse ($order->items ?? [] as $item)
+                    <div class="flex justify-between py-1 text-sm">
+                        <span class="text-gray-700">{{ $item->qty }}× {{ $item->name }}</span>
+                        <span class="text-gray-600">₱{{ number_format($item->price, 2) }}</span>
+                    </div>
+                @empty
+                    <p class="text-xs text-gray-400">No line items recorded for this order.</p>
+                @endforelse
 
-                <hr class="my-3">
+                <hr class="my-3 border-gray-100">
 
-                {{-- Footer --}}
-                <div class="flex justify-between items-center">
-                    <span class="text-green-600 font-bold text-lg">
-                        ₱{{ number_format($order->total, 2) }}
-                    </span>
-
-                    <div class="flex gap-2">
-                        <button class="bg-gray-200 text-gray-600 text-xs px-3 py-2 rounded-full font-medium hover:bg-gray-300 transition">
-                            View Receipt
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-lg font-bold text-green-600">₱{{ number_format($order->total, 2) }}</span>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button"
+                            class="rounded-full bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-200">
+                            View receipt
                         </button>
-
-                        @if($order->status == 'ready')
-                            <button class="bg-green-500 text-white text-xs px-3 py-2 rounded-full font-medium hover:bg-green-600 transition">
+                        @if ($order->status == 'ready')
+                            <button type="button"
+                                class="rounded-full bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-700">
                                 Pick up
                             </button>
                         @elseif($order->status == 'completed')
-                            <button class="bg-yellow-400 text-white text-xs px-3 py-2 rounded-full font-medium hover:bg-yellow-500 transition">
-                                Rate Order
+                            <button type="button"
+                                class="rounded-full bg-amber-400 px-3 py-2 text-xs font-medium text-amber-950 transition hover:bg-amber-500">
+                                Rate order
                             </button>
                         @else
-                            <button class="bg-green-500 text-white text-xs px-3 py-2 rounded-full font-medium hover:bg-green-600 transition">
-                                Track Order
+                            <button type="button"
+                                class="rounded-full bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-700">
+                                Track order
                             </button>
                         @endif
                     </div>
                 </div>
-
             </div>
-            @empty
-            <div class="bg-white rounded-xl p-8 text-center shadow-sm empty-state">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        @empty
+            <div class="empty-state rounded-xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto mb-3 h-12 w-12 text-gray-300" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
-                <p class="text-gray-500 text-sm">No orders yet</p>
-                <p class="text-gray-400 text-xs mt-1">Your order history will appear here</p>
+                <p class="text-sm text-gray-500">No orders yet</p>
+                <p class="mt-1 text-xs text-gray-400">Your order history will appear here</p>
             </div>
-            @endforelse
-
-        </div>
-
+        @endforelse
     </div>
 
+    @push('scripts')
+        <script>
+            const unreadBadge = document.getElementById('unread-badge');
+            const unreadCountEndpoint = @json(route('student.unread-count'));
 
-
-    {{-- BOTTOM NAV --}}
-    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3">
-
-        <a href="{{ route('student.dashboard') }}"
-            class="flex flex-col items-center text-xs text-gray-400">
-
-            Home
-
-        </a>
-
-
-        <a href="{{ route('student.orders') }}" class="flex flex-col items-center text-xs text-green-600 font-semibold">
-
-            Orders
-
-        </a>
-
-
-        <a href="{{ route('student.profile') }}" class="flex flex-col items-center text-xs text-gray-400">
-
-            Profile
-
-        </a>
-
-    </div>
-
-    <script>
-        // Update unread notification count
-        const unreadBadge = document.getElementById('unread-badge');
-        const unreadCountEndpoint = '{{ route('student.unread-count') }}';
-
-        async function updateUnreadCount() {
+            async function updateUnreadCount() {
+                if (!unreadBadge) return;
                 try {
                     const response = await fetch(unreadCountEndpoint, {
                         headers: {
@@ -286,83 +134,64 @@ M7 13l-1.5 6h13M7 13L5.4 5M10
                     });
                     const data = await response.json();
                     const count = data.unread_count || 0;
-
                     if (count > 0) {
-                        unreadBadge.textContent = count > 99 ? '99+' : count;
+                        unreadBadge.textContent = count > 99 ? '99+' : String(count);
                         unreadBadge.style.display = 'flex';
                     } else {
                         unreadBadge.style.display = 'none';
                     }
-                } catch (error) {
-                    console.error('Error updating unread count:', error);
-                }
-        }
+                } catch (e) {}
+            }
+            updateUnreadCount();
+            setInterval(updateUnreadCount, 30000);
 
-        // Update count on page load
-        updateUnreadCount();
+            document.addEventListener('DOMContentLoaded', function() {
+                const tabButtons = document.querySelectorAll('.tab-button');
+                const orderCards = document.querySelectorAll('.order-card');
 
-        // Update count every 30 seconds
-        setInterval(updateUnreadCount, 30000);
+                tabButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        tabButtons.forEach(btn => {
+                            btn.classList.remove('bg-green-600', 'text-white');
+                            btn.classList.add('bg-gray-200', 'text-gray-600');
+                        });
+                        this.classList.add('bg-green-600', 'text-white');
+                        this.classList.remove('bg-gray-200', 'text-gray-600');
 
-        // Tab filtering functionality
-        document.addEventListener('DOMContentLoaded', function() {
-            const tabButtons = document.querySelectorAll('.tab-button');
-            const orderCards = document.querySelectorAll('.order-card');
+                        const filter = this.getAttribute('data-filter');
+                        orderCards.forEach(card => {
+                            const status = card.getAttribute('data-status');
+                            if (filter === 'all') {
+                                card.style.display = 'block';
+                            } else if (filter === 'pending') {
+                                card.style.display = status === 'pending' ? 'block' : 'none';
+                            } else if (filter === 'completed') {
+                                card.style.display = status === 'completed' ? 'block' : 'none';
+                            }
+                        });
 
-            tabButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    // Remove active class from all buttons
-                    tabButtons.forEach(btn => {
-                        btn.classList.remove('active', 'bg-green-500', 'text-white');
-                        btn.classList.add('bg-gray-200', 'text-gray-600');
-                    });
+                        const visibleCards = Array.from(orderCards).filter(card => card.style.display !== 'none');
+                        let emptyState = document.querySelector('.empty-state');
+                        const ordersContainer = document.querySelector('.orders-container');
 
-                    // Add active class to clicked button
-                    this.classList.add('active', 'bg-green-500', 'text-white');
-                    this.classList.remove('bg-gray-200', 'text-gray-600');
-
-                    // Get filter type
-                    const filter = this.getAttribute('data-filter');
-
-                    // Filter orders
-                    orderCards.forEach(card => {
-                        const status = card.getAttribute('data-status');
-
-                        if (filter === 'all') {
-                            card.style.display = 'block';
-                        } else if (filter === 'pending') {
-                            card.style.display = status === 'pending' ? 'block' : 'none';
-                        } else if (filter === 'completed') {
-                            card.style.display = status === 'completed' ? 'block' : 'none';
+                        if (visibleCards.length === 0 && orderCards.length > 0 && ordersContainer) {
+                            if (!emptyState) {
+                                emptyState = document.createElement('div');
+                                emptyState.className =
+                                    'empty-state rounded-xl border border-gray-100 bg-white p-8 text-center shadow-sm';
+                                emptyState.innerHTML = `
+                                    <p class="text-sm text-gray-500">No ${filter} orders</p>
+                                    <p class="mt-1 text-xs text-gray-400">Try another tab</p>
+                                `;
+                                ordersContainer.appendChild(emptyState);
+                            }
+                        } else if (emptyState && emptyState.parentNode && visibleCards.length > 0 &&
+                            emptyState.textContent.includes('No ') && emptyState.textContent.includes('orders')) {
+                            emptyState.remove();
                         }
                     });
-
-                    // Handle empty state
-                    const visibleCards = Array.from(orderCards).filter(card => card.style.display !== 'none');
-                    const emptyState = document.querySelector('.empty-state');
-
-                    if (visibleCards.length === 0 && !emptyState) {
-                        // Create empty state if no cards are visible
-                        const ordersContainer = document.querySelector('.orders-container');
-                        const emptyDiv = document.createElement('div');
-                        emptyDiv.className = 'bg-white rounded-xl p-8 text-center shadow-sm empty-state';
-                        emptyDiv.innerHTML = `
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            <p class="text-gray-500 text-sm">No ${filter} orders</p>
-                            <p class="text-gray-400 text-xs mt-1">Your ${filter} order history will appear here</p>
-                        `;
-                        ordersContainer.appendChild(emptyDiv);
-                    } else if (emptyState && visibleCards.length > 0) {
-                        // Remove empty state if cards become visible
-                        emptyState.remove();
-                    }
                 });
             });
-        });
-    </script>
-
-</body>
-
-</html>
+        </script>
+    @endpush
+</x-layouts.student>

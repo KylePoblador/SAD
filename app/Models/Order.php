@@ -12,6 +12,7 @@ class Order extends Model
         'status',
         'total',
         'canteen_id',
+        'is_read',
     ];
 
     protected $casts = [

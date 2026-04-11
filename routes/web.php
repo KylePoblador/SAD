@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StudentController;
+use App\Models\ActivityNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -84,6 +85,10 @@ Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'up
     ->middleware(['auth','verified'])
     ->name('student.wallet.update');
 
+Route::post('/student/wallet/deposit-inquiry', [StudentController::class, 'storeWalletDepositInquiry'])
+    ->middleware(['auth','verified'])
+    ->name('student.wallet.deposit-inquiry');
+
 Route::get('/student/notification', [StudentController::class, 'notifications'])
     ->middleware(['auth','verified'])
     ->name('student.notification');
@@ -96,9 +101,17 @@ Route::get('/student/notification-stream', [StudentController::class, 'notificat
     ->middleware(['auth','verified'])
     ->name('student.notification.stream');
 
-Route::post('/student/notification/{orderId}/read', [StudentController::class, 'markNotificationAsRead'])
+Route::post('/student/notification/mark-read', [StudentController::class, 'markNotificationRead'])
     ->middleware(['auth','verified'])
     ->name('student.notification.mark-read');
+
+Route::post('/student/notification/mark-all-read', [StudentController::class, 'markAllNotificationsRead'])
+    ->middleware(['auth','verified'])
+    ->name('student.notification.mark-all-read');
+
+Route::post('/student/notification/clear-all', [StudentController::class, 'clearAllNotifications'])
+    ->middleware(['auth','verified'])
+    ->name('student.notification.clear-all');
 
 Route::get('/student/unread-count', [StudentController::class, 'unreadNotificationCount'])
     ->middleware(['auth','verified'])
@@ -149,8 +162,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
     Route::get('/staff/notification', [DashboardController::class, 'notification'])->name('staff.notification');
     Route::get('/staff/notification-data', [DashboardController::class, 'notificationData'])->name('staff.notification.data');
+    Route::post('/staff/notification/mark-read', [DashboardController::class, 'markStaffNotificationRead'])
+        ->name('staff.notification.mark-read');
+
+    Route::post('/staff/notification/mark-all-read', [DashboardController::class, 'markAllStaffNotificationsRead'])
+        ->name('staff.notification.mark-all-read');
+
+    Route::post('/staff/notification/clear-all', [DashboardController::class, 'clearAllStaffNotifications'])
+        ->name('staff.notification.clear-all');
 
     Route::get('/staff/menu', [DashboardController::class, 'menu'])->name('staff.menu');
+    Route::post('/staff/menu', [DashboardController::class, 'storeMenuItem'])->name('staff.menu.store');
+    Route::delete('/staff/menu/{menuItem}', [DashboardController::class, 'destroyMenuItem'])->name('staff.menu.destroy');
+    Route::patch('/staff/menu/{menuItem}/toggle', [DashboardController::class, 'toggleMenuItem'])->name('staff.menu.toggle');
 
     Route::get('/staff/wallet', [DashboardController::class, 'wallet'])->name('staff.wallet');
 
@@ -161,6 +185,9 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
 
+    Route::patch('/staff/deposit-inquiries/{walletDepositInquiry}/done', [DashboardController::class, 'completeDepositInquiry'])
+        ->name('staff.deposit-inquiry.done');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -168,41 +195,8 @@ Route::middleware('auth')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/student/canteen/{college}', function ($college) {
-
-        $canteens = [
-            'ceit' => 'CEIT Canteen',
-            'cass' => 'CASS Food Hub',
-            'chefs' => 'CHEFS Dining',
-            'cbdem' => 'CBDEM Snack Bar',
-            'cti' => 'CTI Canteen'
-        ];
-
-        if (!array_key_exists($college, $canteens)) {
-            abort(404);
-        }
-
-        $totalSeats = 25;
-        $occupiedCount = DB::table('seat_reservations')
-            ->where('college', $college)
-            ->count();
-        $availableSeats = max($totalSeats - $occupiedCount, 0);
-        $reservedSeat = DB::table('seat_reservations')
-            ->where('college', $college)
-            ->where('user_id', Auth::id())
-            ->value('seat_number');
-
-        return view("student.canteen.$college", [
-            'college' => $college,
-            'canteenName' => $canteens[$college],
-            'totalSeats' => $totalSeats,
-            'occupiedCount' => $occupiedCount,
-            'availableSeats' => $availableSeats,
-            'reservedSeat' => $reservedSeat,
-            'hasReservedSeat' => $reservedSeat !== null,
-        ]);
-
-    })->name('student.canteen');
+    Route::get('/student/canteen/{college}', [StudentController::class, 'showCanteen'])
+        ->name('student.canteen');
 
 
     Route::get('/student/reserve/{college}', function ($college) {
@@ -244,6 +238,15 @@ Route::middleware('auth')->group(function () {
                 'updated_at' => now(),
                 'created_at' => now(),
             ]
+        );
+
+        $canteenLabel = config('canteens')[$validated['college']]['label'] ?? $validated['college'];
+        ActivityNotification::notifyUser(
+            $request->user()->id,
+            ActivityNotification::TYPE_SEAT_RESERVED,
+            'Seat reserved',
+            'Seat #'.$validated['seat'].' at '.$canteenLabel.'.',
+            null
         );
 
         return redirect()
