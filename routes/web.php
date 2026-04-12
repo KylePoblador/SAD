@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
 use App\Models\ActivityNotification;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -17,9 +17,9 @@ Route::get('/force-logout', function () {
     Auth::logout();
     session()->invalidate();
     session()->regenerateToken();
+
     return redirect('/');
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -29,7 +29,7 @@ Route::get('/force-logout', function () {
 
 Route::get('/dashboard', function () {
 
-    if (!Auth::check()) {
+    if (! Auth::check()) {
         return redirect('/');
     }
 
@@ -37,9 +37,8 @@ Route::get('/dashboard', function () {
         ? redirect()->route('student.dashboard')
         : redirect()->route('staff.dashboard');
 })
-->middleware(['auth','verified'])
-->name('dashboard');
-
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 /*
 |--------------------------------------------------------------------------
@@ -48,9 +47,8 @@ Route::get('/dashboard', function () {
 */
 
 Route::get('/staff/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('staff.dashboard');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -59,9 +57,8 @@ Route::get('/staff/dashboard', [DashboardController::class, 'index'])
 */
 
 Route::get('/student/dashboard', [StudentController::class, 'index'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.dashboard');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -70,57 +67,56 @@ Route::get('/student/dashboard', [StudentController::class, 'index'])
 */
 
 Route::get('/student/profile', [StudentController::class, 'profile'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.profile');
 
 Route::get('/student/orders', [StudentController::class, 'orders'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.orders');
 
 Route::get('/student/wallet', [StudentController::class, 'wallet'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.wallet');
 
 Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'updateWalletBalance'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.wallet.update');
 
 Route::post('/student/wallet/deposit-inquiry', [StudentController::class, 'storeWalletDepositInquiry'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.wallet.deposit-inquiry');
 
 Route::get('/student/notification', [StudentController::class, 'notifications'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.notification');
 
 Route::get('/student/notification-data', [StudentController::class, 'notificationData'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.notification.data');
 
 Route::get('/student/notification-stream', [StudentController::class, 'notificationStream'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.notification.stream');
 
 Route::post('/student/notification/mark-read', [StudentController::class, 'markNotificationRead'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.notification.mark-read');
 
 Route::post('/student/notification/mark-all-read', [StudentController::class, 'markAllNotificationsRead'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.notification.mark-all-read');
 
 Route::post('/student/notification/clear-all', [StudentController::class, 'clearAllNotifications'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.notification.clear-all');
 
 Route::get('/student/unread-count', [StudentController::class, 'unreadNotificationCount'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.unread-count');
 
 Route::patch('/student/profile', [StudentController::class, 'updateProfile'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('student.profile.update');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -129,13 +125,12 @@ Route::patch('/student/profile', [StudentController::class, 'updateProfile'])
 */
 
 Route::get('/staff/profile', [DashboardController::class, 'profile'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('staff.profile');
 
 Route::patch('/staff/profile', [DashboardController::class, 'updateProfile'])
-    ->middleware(['auth','verified'])
+    ->middleware(['auth', 'verified'])
     ->name('staff.profile.update');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -151,7 +146,6 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-
     /*
     |--------------------------------------------------------------------------
     | STAFF PAGES
@@ -160,6 +154,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/staff/orders', [DashboardController::class, 'orders'])->name('staff.orders');
     Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
+    Route::patch('/staff/orders/{order}/status', [DashboardController::class, 'updateOrderStatus'])->name('staff.orders.status');
     Route::get('/staff/notification', [DashboardController::class, 'notification'])->name('staff.notification');
     Route::get('/staff/notification-data', [DashboardController::class, 'notificationData'])->name('staff.notification.data');
     Route::post('/staff/notification/mark-read', [DashboardController::class, 'markStaffNotificationRead'])
@@ -175,11 +170,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/staff/menu', [DashboardController::class, 'storeMenuItem'])->name('staff.menu.store');
     Route::delete('/staff/menu/{menuItem}', [DashboardController::class, 'destroyMenuItem'])->name('staff.menu.destroy');
     Route::patch('/staff/menu/{menuItem}/toggle', [DashboardController::class, 'toggleMenuItem'])->name('staff.menu.toggle');
+    Route::patch('/staff/menu/{menuItem}', [DashboardController::class, 'updateMenuItem'])->name('staff.menu.update');
 
     Route::get('/staff/wallet', [DashboardController::class, 'wallet'])->name('staff.wallet');
 
     Route::get('/staff/seats', [DashboardController::class, 'seats'])->name('staff.seats');
     Route::post('/staff/seats/release', [DashboardController::class, 'releaseSeat'])->name('staff.seats.release');
+    Route::post('/staff/seats/release-all', [DashboardController::class, 'releaseAllSeats'])->name('staff.seats.release-all');
 
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
 
@@ -187,7 +184,6 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/staff/deposit-inquiries/{walletDepositInquiry}/done', [DashboardController::class, 'completeDepositInquiry'])
         ->name('staff.deposit-inquiry.done');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -198,6 +194,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/student/canteen/{college}', [StudentController::class, 'showCanteen'])
         ->name('student.canteen');
 
+    Route::get('/student/cart', [StudentController::class, 'cartHub'])->name('student.cart.hub');
+    Route::get('/student/cart/{college}', [StudentController::class, 'showCart'])->name('student.cart');
+    Route::post('/student/cart/{college}/add', [StudentController::class, 'cartAdd'])->name('student.cart.add');
+    Route::post('/student/cart/{college}/qty', [StudentController::class, 'cartSetQty'])->name('student.cart.qty');
+    Route::post('/student/cart/{college}/remove', [StudentController::class, 'cartRemoveItem'])->name('student.cart.remove');
+    Route::post('/student/cart/{college}/checkout', [StudentController::class, 'cartCheckout'])->name('student.cart.checkout');
 
     Route::get('/student/reserve/{college}', function ($college) {
         $occupied = DB::table('seat_reservations')
@@ -210,7 +212,6 @@ Route::middleware('auth')->group(function () {
             'occupied' => $occupied,
         ]);
     })->name('student.reserve');
-
 
     Route::post('/student/confirm-seat', function (Request $request) {
         $validated = $request->validate([

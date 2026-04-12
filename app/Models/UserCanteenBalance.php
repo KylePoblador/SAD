@@ -66,6 +66,40 @@ class UserCanteenBalance extends Model
         });
     }
 
+    /**
+     * Deduct amount from the student’s balance for one canteen slug; returns new balance for that canteen.
+     *
+     * @throws \RuntimeException If the row is missing or balance is insufficient.
+     */
+    public static function subtract(int $userId, string $college, float $amount): float
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Subtract amount must be positive.');
+        }
+
+        $college = self::normalizedCollege($college);
+
+        return (float) DB::transaction(function () use ($userId, $college, $amount) {
+            $row = static::query()
+                ->where('user_id', $userId)
+                ->where('college', $college)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $row || (float) $row->balance + 1e-6 < $amount) {
+                throw new \RuntimeException('Insufficient balance for this canteen.');
+            }
+
+            $row->balance = round((float) $row->balance - $amount, 2);
+            $row->save();
+
+            $total = round((float) static::query()->where('user_id', $userId)->sum('balance'), 2);
+            User::query()->whereKey($userId)->update(['wallet_balance' => $total]);
+
+            return (float) $row->balance;
+        });
+    }
+
     public static function totalForUser(int $userId): float
     {
         return round((float) static::query()->where('user_id', $userId)->sum('balance'), 2);

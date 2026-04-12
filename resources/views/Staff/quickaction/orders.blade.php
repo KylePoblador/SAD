@@ -1,8 +1,9 @@
 @php
     $status = $status ?? 'pending';
+    $statusCounts = $statusCounts ?? ['pending' => 0, 'preparing' => 0, 'ready' => 0, 'completed' => 0];
 @endphp
 
-<x-layouts.staff-subpage title="Order Management" :subtitle="$canteenName ?? 'Canteen'">
+<x-layouts.staff-subpage title="Order management" :subtitle="$canteenName ?? 'Canteen'">
     <x-slot:tabs>
         <div class="flex flex-wrap gap-2">
             @foreach (['pending' => 'Pending', 'preparing' => 'Preparing', 'ready' => 'Ready', 'completed' => 'Completed'] as $key => $label)
@@ -14,75 +15,105 @@
                         'completed' => 'bg-green-600 text-white shadow-sm ring-1 ring-green-700/40',
                         default => 'bg-green-600 text-white',
                     };
+                    $cnt = (int) ($statusCounts[$key] ?? 0);
                 @endphp
                 <a href="{{ route('staff.orders', ['status' => $key]) }}"
                     class="rounded-lg px-3 py-1.5 text-xs font-semibold transition {{ $status === $key ? $activeTab : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50' }}">
                     {{ $label }}
+                    @if ($cnt > 0)
+                        <span class="ml-1 rounded-full bg-black/10 px-1.5 py-0.5 text-[10px]">{{ $cnt }}</span>
+                    @endif
                 </a>
             @endforeach
         </div>
     </x-slot:tabs>
 
+    @if (session('status') === 'order-updated')
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
+            Order status updated.
+        </div>
+    @endif
+
+    @if ($errors->has('status'))
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {{ $errors->first('status') }}
+        </div>
+    @endif
+
     @forelse ($orders as $order)
         <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-            <div class="mb-3 flex items-start justify-between gap-2">
-                <div>
-                    <p class="font-bold text-gray-900">{{ $order->name }}</p>
-                    <p class="mt-1 text-xs text-gray-500">{{ $order->student_id }}</p>
-                    <p class="text-xs text-gray-500">Order ID: {{ $order->order_number }}</p>
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <p class="font-bold text-gray-900">{{ $order->user->name ?? 'Unknown' }}</p>
+                    <p class="mt-1 text-xs text-gray-500">Student #{{ $order->user->id ?? '—' }}</p>
+                    <p class="text-xs text-gray-500">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
+                    <p class="text-xs text-gray-400">{{ $order->created_at?->format('M j, Y g:i A') }}</p>
                 </div>
-                @if ($status === 'completed')
-                    <div class="text-right">
-                        <span
-                            class="inline-block rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-bold text-white">PAID</span>
-                        <p class="mt-1 text-xs text-gray-400">{{ $order->created_at->format('h:i A') }}</p>
-                    </div>
-                @endif
+                <div class="flex shrink-0 flex-col items-end gap-2">
+                    @php
+                        $badge = match ($order->status) {
+                            'pending' => 'bg-yellow-100 text-yellow-900',
+                            'preparing' => 'bg-orange-100 text-orange-900',
+                            'ready' => 'bg-green-100 text-green-900',
+                            'completed' => 'bg-green-600 text-white',
+                            default => 'bg-gray-100 text-gray-800',
+                        };
+                    @endphp
+                    <span class="rounded-full px-2.5 py-0.5 text-xs font-bold capitalize {{ $badge }}">{{ $order->status }}</span>
+                    <a href="{{ route('staff.order.detail', $order) }}"
+                        class="text-xs font-semibold text-green-600 hover:text-green-700">View detail</a>
+                </div>
             </div>
 
             <div class="space-y-1 border-t border-gray-100 pt-3 text-sm">
-                @if (isset($order->items) && $order->items->count() > 0)
-                    @foreach ($order->items as $item)
-                        <div class="flex justify-between text-gray-700">
-                            <span>{{ $item->name }} ×{{ $item->qty }}</span>
-                            <span class="font-medium">₱{{ number_format($item->price, 2) }}</span>
-                        </div>
-                    @endforeach
-                @else
-                    <div class="flex justify-between text-gray-700">
-                        <span>Chicken Adobo Meal ×1</span>
-                        <span class="font-medium">₱65.00</span>
+                @forelse ($order->items ?? [] as $item)
+                    <div class="flex justify-between gap-2 text-gray-700">
+                        <span class="min-w-0">{{ $item->name }} ×{{ $item->qty }}</span>
+                        <span class="shrink-0 font-medium">₱{{ number_format((float) $item->price * (int) $item->qty, 2) }}</span>
                     </div>
-                    <div class="flex justify-between text-gray-700">
-                        <span>Iced Coffee ×1</span>
-                        <span class="font-medium">₱35.00</span>
-                    </div>
-                @endif
+                @empty
+                    <p class="text-xs text-gray-400">No line items.</p>
+                @endforelse
             </div>
 
             <div class="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 font-bold text-gray-900">
                 <span>Total</span>
-                <span>₱{{ number_format($order->total ?? 100, 2) }}</span>
+                <span>₱{{ number_format((float) ($order->total ?? 0), 2) }}</span>
             </div>
 
-            @if ($status === 'pending')
-                <button type="button"
-                    class="mt-4 w-full rounded-xl bg-yellow-500 py-2.5 text-sm font-semibold text-yellow-950 shadow-sm transition hover:bg-yellow-400">
-                    Start Preparing
-                </button>
-            @elseif($status === 'preparing')
-                <button type="button"
-                    class="mt-4 w-full rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600">
-                    Mark as Ready
-                </button>
-            @elseif($status === 'ready')
-                <button type="button"
-                    class="mt-4 w-full rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
-                    Mark as Complete
-                </button>
+            @if ($order->status === 'pending')
+                <form method="post" action="{{ route('staff.orders.status', $order) }}" class="mt-4">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="status" value="preparing">
+                    <button type="submit"
+                        class="w-full min-h-[44px] touch-manipulation rounded-xl bg-yellow-500 py-2.5 text-sm font-semibold text-yellow-950 shadow-sm transition hover:bg-yellow-400">
+                        Start preparing
+                    </button>
+                </form>
+            @elseif($order->status === 'preparing')
+                <form method="post" action="{{ route('staff.orders.status', $order) }}" class="mt-4">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="status" value="ready">
+                    <button type="submit"
+                        class="w-full min-h-[44px] touch-manipulation rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600">
+                        Mark ready for pickup
+                    </button>
+                </form>
+            @elseif($order->status === 'ready')
+                <form method="post" action="{{ route('staff.orders.status', $order) }}" class="mt-4">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="status" value="completed">
+                    <button type="submit"
+                        class="w-full min-h-[44px] touch-manipulation rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
+                        Mark completed
+                    </button>
+                </form>
             @endif
         </div>
     @empty
-        <p class="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm">No orders found.</p>
+        <p class="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm">No orders in this stage.</p>
     @endforelse
 </x-layouts.staff-subpage>

@@ -1,4 +1,10 @@
 <x-layouts.student title="My orders" active="orders">
+    @if (session('status') === 'order-placed')
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-900">
+            Order placed. You can track it below.
+        </div>
+    @endif
+
     <div class="relative overflow-hidden rounded-2xl bg-green-600 p-5 text-white shadow-sm">
         <div class="mb-2 flex items-center justify-between">
             <p class="text-sm font-medium opacity-90">Total balance (all canteens)</p>

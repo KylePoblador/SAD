@@ -16,6 +16,9 @@
     <a href="{{ route('student.dashboard') }}" class="{{ $navItem('home') }}">
         Home
     </a>
+    <a href="{{ route('student.cart.hub') }}" class="{{ $navItem('cart') }}">
+        Cart
+    </a>
     <a href="{{ route('student.orders') }}" class="{{ $navItem('orders') }}">
         Orders
     </a>

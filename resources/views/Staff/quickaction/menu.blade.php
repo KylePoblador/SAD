@@ -3,6 +3,17 @@
 @endphp
 
 <x-layouts.staff-subpage title="Menu management" subtitle="Items you add appear on the student canteen page">
+    @if ($errors->any() && !$menuFormHasErrors)
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p class="font-semibold">Could not save changes</p>
+            <ul class="mt-2 list-inside list-disc text-xs">
+                @foreach ($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     @if (session('status') === 'menu-added')
         <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Menu item added.
         </div>
@@ -13,6 +24,10 @@
     @endif
     @if (session('status') === 'menu-updated')
         <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Availability updated.
+        </div>
+    @endif
+    @if (session('status') === 'menu-edited')
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Menu item updated.
         </div>
     @endif
 
@@ -52,6 +67,12 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-2">
+                <button type="button"
+                    class="btn-menu-edit rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    data-id="{{ $item->id }}" data-name="{{ e($item->name) }}" data-price="{{ $item->price }}"
+                    data-category="{{ e($item->category) }}" data-url="{{ route('staff.menu.update', $item) }}">
+                    Edit
+                </button>
                 <form method="POST" action="{{ route('staff.menu.toggle', $item) }}">
                     @csrf
                     @method('PATCH')
@@ -153,6 +174,73 @@
         </div>
     </div>
 
+    {{-- Edit item modal --}}
+    <div id="menu-edit-modal" role="dialog" aria-modal="true" aria-labelledby="menu-edit-title"
+        class="fixed inset-0 z-50 flex items-end justify-center opacity-0 pointer-events-none transition-opacity duration-200 ease-out sm:items-center sm:p-4">
+        <div id="menu-edit-backdrop" class="absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity"></div>
+        <div id="menu-edit-panel"
+            class="relative z-10 flex max-h-[min(90vh,640px)] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-2xl transition-transform duration-300 ease-out sm:rounded-2xl translate-y-full sm:translate-y-0 sm:scale-95 sm:opacity-0">
+            <div class="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3 sm:px-5">
+                <h2 id="menu-edit-title" class="text-base font-bold text-gray-900">Edit menu item</h2>
+                <button type="button" id="btn-close-menu-edit"
+                    class="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
+                    aria-label="Close">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+                <form id="staff-menu-edit-form" method="POST" action="" enctype="multipart/form-data" class="space-y-3"
+                    novalidate>
+                    @csrf
+                    @method('PATCH')
+                    <div>
+                        <label class="mb-1 block text-xs font-semibold text-gray-600">Name</label>
+                        <input type="text" name="name" id="staff-menu-edit-name" required
+                            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                        @error('name')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-semibold text-gray-600">Price (₱)</label>
+                        <input type="number" id="staff-menu-edit-price-stepper" step="0.01" min="0" inputmode="decimal"
+                            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                        <input type="hidden" name="price" id="staff-menu-edit-price-value" />
+                        @error('price')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-semibold text-gray-600">Category</label>
+                        <input type="text" name="category" id="staff-menu-edit-category"
+                            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-semibold text-gray-600">Replace photo <span
+                                class="font-normal text-gray-500">(optional)</span></label>
+                        <input type="file" id="staff-menu-edit-photo" name="photo" accept="image/*"
+                            class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-green-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-green-700" />
+                        @error('photo')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                        <button type="button" id="btn-cancel-menu-edit"
+                            class="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="flex-1 rounded-xl bg-green-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
+                            Save changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function() {
             var modal = document.getElementById('menu-add-modal');
@@ -234,6 +322,90 @@
                     photoInput.setCustomValidity('Please choose a product photo.');
                     photoInput.reportValidity();
                     photoInput.setCustomValidity('');
+                }
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            var modal = document.getElementById('menu-edit-modal');
+            var panel = document.getElementById('menu-edit-panel');
+            var backdrop = document.getElementById('menu-edit-backdrop');
+            var form = document.getElementById('staff-menu-edit-form');
+            var closeBtn = document.getElementById('btn-close-menu-edit');
+            var cancelBtn = document.getElementById('btn-cancel-menu-edit');
+            var ui = document.getElementById('staff-menu-edit-price-stepper');
+            var real = document.getElementById('staff-menu-edit-price-value');
+            if (!modal || !panel || !form) return;
+
+            function openEdit() {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                modal.classList.add('opacity-100', 'pointer-events-auto');
+                panel.classList.remove('translate-y-full', 'sm:scale-95', 'sm:opacity-0');
+                panel.classList.add('translate-y-0', 'sm:scale-100', 'sm:opacity-100');
+                document.documentElement.classList.add('overflow-hidden');
+            }
+
+            function closeEdit() {
+                modal.classList.add('opacity-0', 'pointer-events-none');
+                modal.classList.remove('opacity-100', 'pointer-events-auto');
+                panel.classList.add('translate-y-full', 'sm:scale-95', 'sm:opacity-0');
+                panel.classList.remove('translate-y-0', 'sm:scale-100', 'sm:opacity-100');
+                document.documentElement.classList.remove('overflow-hidden');
+            }
+
+            document.querySelectorAll('.btn-menu-edit').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    form.action = btn.getAttribute('data-url') || '';
+                    document.getElementById('staff-menu-edit-name').value = btn.getAttribute('data-name') || '';
+                    document.getElementById('staff-menu-edit-category').value = btn.getAttribute('data-category') ||
+                        'Meals';
+                    var p = btn.getAttribute('data-price') || '';
+                    if (ui) ui.value = p;
+                    if (real) real.value = p;
+                    var ph = document.getElementById('staff-menu-edit-photo');
+                    if (ph) ph.value = '';
+                    openEdit();
+                    setTimeout(function() {
+                        var n = document.getElementById('staff-menu-edit-name');
+                        if (n) n.focus();
+                    }, 200);
+                });
+            });
+
+            closeBtn && closeBtn.addEventListener('click', closeEdit);
+            cancelBtn && cancelBtn.addEventListener('click', closeEdit);
+            backdrop && backdrop.addEventListener('click', closeEdit);
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && modal.classList.contains('pointer-events-auto')) {
+                    closeEdit();
+                }
+            });
+
+            if (ui && real) {
+                function sync() {
+                    real.value = ui.value.trim() === '' ? '' : ui.value;
+                }
+                ui.addEventListener('input', sync);
+                ui.addEventListener('change', sync);
+            }
+
+            form.addEventListener('submit', function(e) {
+                if (ui && real) real.value = ui.value.trim() === '' ? '' : ui.value;
+                var nameInput = document.getElementById('staff-menu-edit-name');
+                var v = real ? String(real.value).trim() : '';
+                if (!nameInput || !String(nameInput.value).trim()) {
+                    e.preventDefault();
+                    if (nameInput) nameInput.reportValidity();
+                    return;
+                }
+                if (v === '' || isNaN(Number(v)) || Number(v) < 0) {
+                    e.preventDefault();
+                    if (ui) {
+                        ui.setCustomValidity('Enter a valid price (₱0 or more).');
+                        ui.reportValidity();
+                        ui.setCustomValidity('');
+                    }
                 }
             });
         })();

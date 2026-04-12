@@ -6,6 +6,7 @@ use App\Models\ActivityNotification;
 use App\Models\CanteenFeedback;
 use App\Models\MenuItem;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\User;
 use App\Models\UserCanteenBalance;
 use App\Models\WalletDepositInquiry;
@@ -49,7 +50,7 @@ class StudentController extends Controller
             $staffNames = $staffCollection->pluck('name')->filter()->values()->all();
 
             $staffLabel = count($staffNames) > 2
-                ? $staffNames[0] . ', ' . $staffNames[1] . ' +' . (count($staffNames) - 2) . ' more'
+                ? $staffNames[0].', '.$staffNames[1].' +'.(count($staffNames) - 2).' more'
                 : implode(', ', $staffNames);
 
             $canteens[] = [
@@ -57,7 +58,7 @@ class StudentController extends Controller
                 'college' => $college,
                 'dist' => $canteenInfo['dist'],
                 'rating' => CanteenFeedback::averageRatingForCollege($college),
-                'seats' => $available . '/' . $totalSeats,
+                'seats' => $available.'/'.$totalSeats,
                 'full' => $available === 0,
                 'staff_names' => $staffLabel,
                 'staff_count' => $staffCollection->count(),
@@ -85,37 +86,40 @@ class StudentController extends Controller
     public function showCanteen(string $college)
     {
         $catalog = config('canteens', []);
-        if (! array_key_exists($college, $catalog)) {
+        $collegeNorm = UserCanteenBalance::normalizedCollege($college);
+        if (! array_key_exists($collegeNorm, $catalog)) {
             abort(404);
         }
 
         $totalSeats = 25;
         $occupiedCount = DB::table('seat_reservations')
-            ->where('college', $college)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->count();
         $availableSeats = max($totalSeats - $occupiedCount, 0);
         $reservedSeat = DB::table('seat_reservations')
-            ->where('college', $college)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->where('user_id', auth()->id())
             ->value('seat_number');
 
         $menuItems = MenuItem::query()
-            ->where('college', $college)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->where('is_available', true)
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
 
         return view('student.canteen.show', [
-            'college' => $college,
-            'canteenName' => $catalog[$college]['label'],
+            'college' => $collegeNorm,
+            'canteenName' => $catalog[$collegeNorm]['label'],
             'totalSeats' => $totalSeats,
             'occupiedCount' => $occupiedCount,
             'availableSeats' => $availableSeats,
             'reservedSeat' => $reservedSeat,
             'hasReservedSeat' => $reservedSeat !== null,
             'menuItems' => $menuItems,
-            'walletBalance' => UserCanteenBalance::balanceFor((int) auth()->id(), $college),
+            'walletBalance' => UserCanteenBalance::balanceFor((int) auth()->id(), $collegeNorm),
+            'cartCount' => $this->cartQuantitySum($collegeNorm),
+            'cartAddUrl' => route('student.cart.add', ['college' => $collegeNorm]),
         ]);
     }
 
@@ -274,7 +278,7 @@ class StudentController extends Controller
             ->take(10)
             ->map(function ($order) {
                 return [
-                    'description' => 'Order ' . $order->order_number,
+                    'description' => 'Order '.$order->order_number,
                     'amount' => $order->total,
                     'type' => 'debit',
                     'date' => $order->created_at->format('M d, Y H:i'),
@@ -498,5 +502,286 @@ class StudentController extends Controller
             'inquiries_closed' => $closedCount,
             'message' => 'Wallet updated successfully',
         ]);
+    }
+
+    public function cartHub()
+    {
+        $catalog = config('canteens', []);
+        $carts = session('student_carts', []);
+        $cards = [];
+
+        foreach ($carts as $slug => $lines) {
+            if (! is_array($lines) || $lines === [] || ! isset($catalog[$slug])) {
+                continue;
+            }
+            $subtotal = (float) collect($lines)->sum(fn ($l) => (float) ($l['price'] ?? 0) * (int) ($l['qty'] ?? 0));
+            $count = (int) collect($lines)->sum(fn ($l) => (int) ($l['qty'] ?? 0));
+            $cards[] = [
+                'college' => $slug,
+                'label' => $catalog[$slug]['label'],
+                'count' => $count,
+                'subtotal' => $subtotal,
+            ];
+        }
+
+        if (count($cards) === 1) {
+            return redirect()->route('student.cart', ['college' => $cards[0]['college']]);
+        }
+
+        return view('student.cart.hub', [
+            'carts' => $cards,
+        ]);
+    }
+
+    public function showCart(string $college)
+    {
+        $collegeNorm = $this->assertCatalogCollege($college);
+        $catalog = config('canteens', []);
+        $lines = $this->getCartLines($collegeNorm);
+        $subtotal = (float) collect($lines)->sum(fn ($l) => (float) ($l['price'] ?? 0) * (int) ($l['qty'] ?? 0));
+        $hasSeat = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->exists();
+
+        return view('student.cart.show', [
+            'college' => $collegeNorm,
+            'canteenName' => $catalog[$collegeNorm]['label'],
+            'lines' => $lines,
+            'subtotal' => $subtotal,
+            'walletBalance' => UserCanteenBalance::balanceFor((int) auth()->id(), $collegeNorm),
+            'hasReservedSeat' => $hasSeat,
+        ]);
+    }
+
+    public function cartAdd(Request $request, string $college)
+    {
+        $collegeNorm = $this->assertCatalogCollege($college);
+
+        $hasSeat = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->exists();
+
+        if (! $hasSeat) {
+            $message = 'Reserve a seat at this canteen before adding items to your cart.';
+
+            return $request->wantsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->withErrors(['cart' => $message]);
+        }
+
+        $validated = $request->validate([
+            'menu_item_id' => ['required', 'integer', Rule::exists('menu_items', 'id')],
+        ]);
+
+        $item = $this->findAvailableMenuItem((int) $validated['menu_item_id'], $collegeNorm);
+
+        if (! $item) {
+            $message = 'That item is not available from this canteen.';
+
+            return $request->wantsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->withErrors(['cart' => $message]);
+        }
+
+        $lines = $this->getCartLines($collegeNorm);
+        $found = false;
+        foreach ($lines as &$line) {
+            if ((int) ($line['menu_item_id'] ?? 0) === (int) $item->id) {
+                $line['qty'] = (int) ($line['qty'] ?? 0) + 1;
+                $found = true;
+                break;
+            }
+        }
+        unset($line);
+
+        if (! $found) {
+            $lines[] = [
+                'menu_item_id' => $item->id,
+                'name' => $item->name,
+                'price' => (float) $item->price,
+                'qty' => 1,
+            ];
+        }
+
+        $this->putCartLines($collegeNorm, $lines);
+        $count = $this->cartQuantitySum($collegeNorm);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'cart_count' => $count,
+            ]);
+        }
+
+        return back()->with('status', 'added-to-cart');
+    }
+
+    public function cartSetQty(Request $request, string $college)
+    {
+        $collegeNorm = $this->assertCatalogCollege($college);
+        $validated = $request->validate([
+            'menu_item_id' => ['required', 'integer'],
+            'qty' => ['required', 'integer', 'min:0', 'max:99'],
+        ]);
+
+        $newLines = [];
+        foreach ($this->getCartLines($collegeNorm) as $line) {
+            if ((int) ($line['menu_item_id'] ?? 0) === (int) $validated['menu_item_id']) {
+                if ((int) $validated['qty'] > 0) {
+                    $line['qty'] = (int) $validated['qty'];
+                    $newLines[] = $line;
+                }
+
+                continue;
+            }
+            $newLines[] = $line;
+        }
+
+        $this->putCartLines($collegeNorm, $newLines);
+
+        return redirect()->route('student.cart', ['college' => $collegeNorm]);
+    }
+
+    public function cartRemoveItem(Request $request, string $college)
+    {
+        $collegeNorm = $this->assertCatalogCollege($college);
+        $validated = $request->validate([
+            'menu_item_id' => ['required', 'integer'],
+        ]);
+
+        $newLines = array_values(array_filter(
+            $this->getCartLines($collegeNorm),
+            fn ($l) => (int) ($l['menu_item_id'] ?? 0) !== (int) $validated['menu_item_id']
+        ));
+
+        $this->putCartLines($collegeNorm, $newLines);
+
+        return redirect()->route('student.cart', ['college' => $collegeNorm]);
+    }
+
+    public function cartCheckout(Request $request, string $college)
+    {
+        $collegeNorm = $this->assertCatalogCollege($college);
+
+        $hasSeat = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->exists();
+
+        if (! $hasSeat) {
+            return back()->withErrors(['checkout' => 'Reserve a seat before placing an order.']);
+        }
+
+        $lines = $this->getCartLines($collegeNorm);
+        if ($lines === []) {
+            return back()->withErrors(['checkout' => 'Your cart is empty.']);
+        }
+
+        try {
+            DB::transaction(function () use ($collegeNorm, $lines) {
+                $validatedLines = [];
+                $total = 0.0;
+
+                foreach ($lines as $line) {
+                    $menu = $this->findAvailableMenuItem((int) ($line['menu_item_id'] ?? 0), $collegeNorm);
+                    if (! $menu) {
+                        throw new \RuntimeException('One or more items are no longer available. Open the menu and refresh your cart.');
+                    }
+                    $qty = max(1, (int) ($line['qty'] ?? 1));
+                    $unit = (float) $menu->price;
+                    $validatedLines[] = [
+                        'menu' => $menu,
+                        'qty' => $qty,
+                        'unit' => $unit,
+                    ];
+                    $total += $unit * $qty;
+                }
+
+                $total = round($total, 2);
+                if ($total <= 0 || $validatedLines === []) {
+                    throw new \RuntimeException('Your cart is empty.');
+                }
+
+                UserCanteenBalance::subtract((int) auth()->id(), $collegeNorm, $total);
+
+                $order = Order::create([
+                    'user_id' => auth()->id(),
+                    'order_number' => null,
+                    'status' => 'pending',
+                    'total' => $total,
+                    'canteen_id' => $collegeNorm,
+                    'is_read' => false,
+                ]);
+
+                $order->update([
+                    'order_number' => 'ORD-'.now()->format('Ymd').'-'.str_pad((string) $order->id, 4, '0', STR_PAD_LEFT),
+                ]);
+
+                foreach ($validatedLines as $row) {
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'name' => $row['menu']->name,
+                        'price' => $row['unit'],
+                        'qty' => $row['qty'],
+                    ]);
+                }
+
+                $this->putCartLines($collegeNorm, []);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['checkout' => $e->getMessage()]);
+        }
+
+        return redirect()->route('student.orders')->with('status', 'order-placed');
+    }
+
+    protected function assertCatalogCollege(string $college): string
+    {
+        $norm = UserCanteenBalance::normalizedCollege($college);
+        if (! array_key_exists($norm, config('canteens', []))) {
+            abort(404);
+        }
+
+        return $norm;
+    }
+
+    /**
+     * @return list<array{menu_item_id:int,name:string,price:float,qty:int}>
+     */
+    protected function getCartLines(string $collegeNorm): array
+    {
+        $carts = session('student_carts', []);
+
+        return $carts[$collegeNorm] ?? [];
+    }
+
+    /**
+     * @param  list<array{menu_item_id:int,name:string,price:float,qty:int}>  $lines
+     */
+    protected function putCartLines(string $collegeNorm, array $lines): void
+    {
+        $carts = session('student_carts', []);
+        if ($lines === []) {
+            unset($carts[$collegeNorm]);
+        } else {
+            $carts[$collegeNorm] = array_values($lines);
+        }
+        session(['student_carts' => $carts]);
+    }
+
+    protected function cartQuantitySum(string $collegeNorm): int
+    {
+        return (int) collect($this->getCartLines($collegeNorm))->sum(fn ($l) => (int) ($l['qty'] ?? 0));
+    }
+
+    protected function findAvailableMenuItem(int $menuItemId, string $collegeNorm): ?MenuItem
+    {
+        return MenuItem::query()
+            ->whereKey($menuItemId)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('is_available', true)
+            ->first();
     }
 }

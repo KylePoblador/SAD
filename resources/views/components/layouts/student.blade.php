@@ -14,7 +14,8 @@
     @include('partials.coinmeal-assets')
 </head>
 
-<body class="min-h-screen bg-gray-100 pb-24 font-sans text-gray-900 antialiased">
+<body
+    class="min-h-screen bg-gray-100 pb-[max(7rem,calc(4.75rem+env(safe-area-inset-bottom,0px)))] font-sans text-gray-900 antialiased">
     @include('partials.student-topbar')
 
     <div class="coinmeal-container space-y-4 py-4 sm:space-y-5 md:space-y-6">

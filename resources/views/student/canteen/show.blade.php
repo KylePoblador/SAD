@@ -22,11 +22,13 @@
                     </div>
                 </div>
             </div>
-            <div class="flex shrink-0 flex-col items-end gap-0.5">
+            <a href="{{ route('student.cart', $college) }}"
+                class="flex shrink-0 flex-col items-end gap-0.5 rounded-lg p-1 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+                aria-label="Open cart">
                 <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cart</span>
                 <span id="cart-count"
-                    class="flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-gray-800 px-2 text-sm font-bold text-white">0</span>
-            </div>
+                    class="flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-gray-800 px-2 text-sm font-bold text-white">{{ (int) ($cartCount ?? 0) }}</span>
+            </a>
         </div>
 
         {{-- Per-canteen wallet --}}
@@ -77,6 +79,19 @@
         {{-- Menu --}}
         <div>
             <h2 class="mb-3 text-base font-bold text-gray-800">Menu</h2>
+
+            @if (! $hasReservedSeat && $menuItems->isNotEmpty())
+                <div
+                    class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+                    <p class="font-semibold">Reserve a seat to add items</p>
+                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">Ordering is unlocked after you have an
+                        active seat reservation for this canteen.</p>
+                    <a href="{{ route('student.reserve', $college) }}"
+                        class="mt-3 inline-flex w-full min-h-[44px] items-center justify-center rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 touch-manipulation sm:w-auto">
+                        Reserve seat
+                    </a>
+                </div>
+            @endif
 
             @if ($menuItems->isEmpty())
                 <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-600">
@@ -139,13 +154,20 @@
                                     <p class="text-xs text-gray-500">{{ $item->category }}</p>
                                 </div>
                             </div>
-                            <div class="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-                                <button type="button"
-                                    class="add-cart-btn rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-45"
-                                    onclick="addToCart({{ json_encode($item->name) }}, {{ $item->price }})"
-                                    {{ $hasReservedSeat ? '' : 'disabled' }}>
-                                    Add to cart
-                                </button>
+                            <div class="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+                                @if ($hasReservedSeat)
+                                    <button type="button"
+                                        class="add-cart-btn min-h-[44px] w-full touch-manipulation rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:bg-green-800 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2"
+                                        data-menu-item-id="{{ $item->id }}"
+                                        onclick="addToCart(this)">
+                                        Add to cart
+                                    </button>
+                                @else
+                                    <a href="{{ route('student.reserve', $college) }}"
+                                        class="inline-flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl border-2 border-amber-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-amber-800 transition hover:bg-amber-50 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2">
+                                        Reserve seat to order
+                                    </a>
+                                @endif
                                 <p class="text-center text-base font-bold text-green-600 sm:text-right">
                                     ₱{{ number_format($item->price, 2) }}</p>
                             </div>
@@ -212,19 +234,40 @@
                 });
             }
 
-            let cart = [];
+            const cartAddUrl = @json($cartAddUrl ?? '');
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-            function addToCart(name, price) {
-                cart.push({
-                    name,
-                    price
-                });
-                updateCartUI();
-            }
-
-            function updateCartUI() {
-                const el = document.getElementById("cart-count");
-                if (el) el.textContent = String(cart.length);
+            async function addToCart(btn) {
+                const id = btn?.getAttribute("data-menu-item-id");
+                if (!id || !cartAddUrl) return;
+                btn.disabled = true;
+                try {
+                    const res = await fetch(cartAddUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "X-CSRF-TOKEN": csrf,
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                        body: JSON.stringify({
+                            menu_item_id: Number(id)
+                        }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        alert(data.message || "Could not add to cart.");
+                        return;
+                    }
+                    if (typeof data.cart_count === "number") {
+                        const el = document.getElementById("cart-count");
+                        if (el) el.textContent = String(data.cart_count);
+                    }
+                } catch (e) {
+                    alert("Network error. Try again.");
+                } finally {
+                    btn.disabled = false;
+                }
             }
         </script>
     @endpush
