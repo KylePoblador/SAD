@@ -88,14 +88,41 @@ class StudentController extends Controller
 
         // Shared feedback entries visible to staff dashboard.
         $sharedEntries = Cache::get('order_feedback_entries', []);
-        $sharedEntries[] = [
-            'order_id' => $orderId,
-            'message' => $validated['feedback'],
-            'from' => 'student',
-            'student_id' => $request->user()?->id,
-            'student_name' => $request->user()?->name ?? 'Student',
-            'submitted_at' => now()->format('Y-m-d H:i'),
-        ];
+        $studentId = $request->user()?->id;
+        $studentName = $request->user()?->name ?? 'Student';
+        $updated = false;
+
+        foreach ($sharedEntries as $index => $entry) {
+            $sameOrder = ($entry['order_id'] ?? null) === $orderId;
+            $fromStudent = ($entry['from'] ?? null) === 'student';
+            $idMatches = isset($entry['student_id']) && $studentId !== null && (int) $entry['student_id'] === $studentId;
+            $nameMatches = ! empty($entry['student_name']) && $entry['student_name'] === $studentName;
+
+            if ($sameOrder && $fromStudent && ($idMatches || $nameMatches)) {
+                $sharedEntries[$index] = [
+                    ...$entry,
+                    'message' => $validated['feedback'],
+                    'student_id' => $studentId,
+                    'student_name' => $studentName,
+                    'submitted_at' => now()->format('Y-m-d H:i'),
+                    'staff_reply' => null,
+                    'replied_at' => null,
+                ];
+                $updated = true;
+                break;
+            }
+        }
+
+        if (! $updated) {
+            $sharedEntries[] = [
+                'order_id' => $orderId,
+                'message' => $validated['feedback'],
+                'from' => 'student',
+                'student_id' => $studentId,
+                'student_name' => $studentName,
+                'submitted_at' => now()->format('Y-m-d H:i'),
+            ];
+        }
         Cache::forever('order_feedback_entries', $sharedEntries);
 
         return redirect()->route('student.dashboard')

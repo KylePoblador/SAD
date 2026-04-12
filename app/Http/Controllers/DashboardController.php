@@ -41,13 +41,24 @@ class DashboardController extends Controller
     public function feedbacks()
     {
         $sharedEntries = Cache::get('order_feedback_entries', []);
+        $defaultEntries = [
+            ['order_id' => 'ORD-1018', 'message' => 'Fast serving and food was hot. Thank you!', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
+            ['order_id' => 'ORD-1027', 'message' => 'Good portion size. Please add more spoon stocks.', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
+            ['order_id' => 'ORD-1030', 'message' => 'Great taste and clean packaging.', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
+        ];
+        $entries = ! empty($sharedEntries) ? $sharedEntries : $defaultEntries;
+
+        // Keep only the latest feedback per order (bottom/latest entry wins).
+        $deduped = [];
+        foreach ($entries as $entry) {
+            $orderId = $entry['order_id'] ?? 'unknown';
+            $deduped[$orderId] = $entry;
+        }
+        $entries = array_values($deduped);
+        Cache::forever('order_feedback_entries', $entries);
 
         return view('Staff.feedbacks', [
-            'feedbacks' => ! empty($sharedEntries) ? $sharedEntries : [
-                ['order_id' => 'ORD-1018', 'message' => 'Fast serving and food was hot. Thank you!', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
-                ['order_id' => 'ORD-1027', 'message' => 'Good portion size. Please add more spoon stocks.', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
-                ['order_id' => 'ORD-1030', 'message' => 'Great taste and clean packaging.', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
-            ],
+            'feedbacks' => $entries,
         ]);
     }
 
