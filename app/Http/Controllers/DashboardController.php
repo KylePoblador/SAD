@@ -11,11 +11,16 @@ use App\Models\WalletDepositInquiry;
 use App\Models\WalletLoadLog;
 use App\Services\InAppNotificationFeed;
 use Illuminate\Http\Request;
+
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+<<<<<<< HEAD
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+=======
+>>>>>>> 980607e9b8e5596e4a05a6d50c45bece1dcc194e
+>>>>>>> 26851425d48497fc0ad5ea9abe12482f463672a6
 
 class DashboardController extends Controller
 {
@@ -202,6 +207,66 @@ class DashboardController extends Controller
         return redirect()->route('staff.profile')->with('status', 'profile-updated');
     }
 
+<<<<<<< HEAD
+    public function orders()    { return view('staff.orders'); }
+    public function menu()      { return view('staff.menu'); }
+    public function wallet()    { return view('staff.wallet'); }
+    public function seats()     { return view('staff.seats'); }
+    public function feedbacks()
+    {
+        $sharedEntries = Cache::get('order_feedback_entries', []);
+        $defaultEntries = [
+            ['order_id' => 'ORD-1018', 'message' => 'Fast serving and food was hot. Thank you!', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
+            ['order_id' => 'ORD-1027', 'message' => 'Good portion size. Please add more spoon stocks.', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
+            ['order_id' => 'ORD-1030', 'message' => 'Great taste and clean packaging.', 'from' => 'student', 'student_name' => 'Student', 'submitted_at' => now()->format('Y-m-d H:i')],
+        ];
+        $entries = ! empty($sharedEntries) ? $sharedEntries : $defaultEntries;
+
+        // Keep only the latest feedback per order (bottom/latest entry wins).
+        $deduped = [];
+        foreach ($entries as $entry) {
+            $orderId = $entry['order_id'] ?? 'unknown';
+            $deduped[$orderId] = $entry;
+        }
+        $entries = array_values($deduped);
+        Cache::forever('order_feedback_entries', $entries);
+
+        return view('Staff.feedbacks', [
+            'feedbacks' => $entries,
+        ]);
+    }
+
+    public function replyFeedback(Request $request, int $feedbackIndex)
+    {
+        $entries = Cache::get('order_feedback_entries', []);
+
+        if (! isset($entries[$feedbackIndex])) {
+            return redirect()->route('staff.feedbacks')
+                ->with('error', 'Feedback entry not found.');
+        }
+
+        if (($entries[$feedbackIndex]['from'] ?? 'student') !== 'student') {
+            return redirect()->route('staff.feedbacks')
+                ->with('error', 'You can only reply to student feedback.');
+        }
+
+        $validated = $request->validate([
+            'reply' => ['required', 'string', 'min:2', 'max:300'],
+        ]);
+
+        $entries[$feedbackIndex] = [
+            ...$entries[$feedbackIndex],
+            'staff_reply' => $validated['reply'],
+            'replied_at' => now()->format('Y-m-d H:i'),
+        ];
+        Cache::forever('order_feedback_entries', $entries);
+
+        return redirect()->route('staff.feedbacks')->with('status', 'Reply sent to student feedback.');
+    }
+
+    public function reports()   { return view('staff.reports'); }
+}
+=======
     public function orders(Request $request)
     {
         $allowed = ['pending', 'preparing', 'ready', 'completed'];
@@ -621,3 +686,4 @@ class DashboardController extends Controller
         }
     }
 }
+>>>>>>> 980607e9b8e5596e4a05a6d50c45bece1dcc194e

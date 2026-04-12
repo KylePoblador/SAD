@@ -110,17 +110,41 @@
                         </div>
                     </div>
 
-                    <div class="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-                        <h3 class="text-lg font-semibold text-gray-800">Recent Orders (UI Demo)</h3>
-                        <div class="mt-4 space-y-3 text-sm">
-                            <div class="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
-                                <span>#ORD-1018</span><span class="rounded-full bg-green-100 px-2 py-1 text-green-700">Completed</span>
+                    <div id="order-status" class="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+                        <h3 class="text-lg font-semibold text-gray-800">Order Status</h3>
+                        <div class="mt-4 space-y-4 text-sm">
+                            <div class="rounded-lg border border-gray-100 px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium text-gray-800">#ORD-1018</span>
+                                    <span class="rounded-full bg-green-100 px-2 py-1 text-green-700">Completed</span>
+                                </div>
+                                <div id="provide-feedback" class="mt-3">
+                                    <label for="feedback_ord_1018"
+                                        class="mb-1 block text-xs font-semibold text-gray-700">Provide Feedback</label>
+                                    <textarea id="feedback_ord_1018" rows="2"
+                                        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                                        placeholder="Order is completed, you can leave feedback here."></textarea>
+                                    <button type="button"
+                                        class="mt-2 rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700">
+                                        Submit Feedback
+                                    </button>
+                                </div>
                             </div>
-                            <div class="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
-                                <span>#ORD-1020</span><span class="rounded-full bg-yellow-100 px-2 py-1 text-yellow-700">Preparing</span>
+
+                            <div class="rounded-lg border border-gray-100 px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium text-gray-800">#ORD-1020</span>
+                                    <span class="rounded-full bg-yellow-100 px-2 py-1 text-yellow-700">Preparing</span>
+                                </div>
+                                <p class="mt-3 text-xs text-gray-500">Feedback is disabled until order is completed.</p>
                             </div>
-                            <div class="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
-                                <span>#ORD-1023</span><span class="rounded-full bg-blue-100 px-2 py-1 text-blue-700">Queued</span>
+
+                            <div class="rounded-lg border border-gray-100 px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium text-gray-800">#ORD-1023</span>
+                                    <span class="rounded-full bg-blue-100 px-2 py-1 text-blue-700">Queued</span>
+                                </div>
+                                <p class="mt-3 text-xs text-gray-500">Feedback is disabled until order is completed.</p>
                             </div>
                         </div>
                     </div>

@@ -59,6 +59,9 @@ Route::get('/staff/dashboard', [DashboardController::class, 'index'])
 Route::get('/student/dashboard', [StudentController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('student.dashboard');
+Route::post('/student/orders/{orderId}/feedback', [StudentController::class, 'submitFeedback'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.feedback.submit');
 
 /*
 |--------------------------------------------------------------------------
@@ -179,6 +182,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/staff/seats/release-all', [DashboardController::class, 'releaseAllSeats'])->name('staff.seats.release-all');
 
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
+<<<<<<< HEAD
+    Route::post('/staff/feedbacks/reply/{feedbackIndex}', [DashboardController::class, 'replyFeedback'])->name('staff.feedbacks.reply');
+    Route::get('/staff/reports',   [DashboardController::class, 'reports'])->name('staff.reports');
+=======
 
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
 
@@ -256,6 +263,7 @@ Route::middleware('auth')->group(function () {
 
     })->name('student.confirm.seat');
 
+>>>>>>> 980607e9b8e5596e4a05a6d50c45bece1dcc194e
 });
 
 require __DIR__.'/auth.php';

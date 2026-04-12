@@ -32,7 +32,22 @@
         </div>
     </header>
 
+<<<<<<< HEAD
+    <div class="max-w-lg mx-auto px-4 py-4 space-y-4">
+        @if (session('status'))
+            <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                {{ session('status') }}
+            </div>
+        @endif
+
+        @if (session('error'))
+            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {{ session('error') }}
+            </div>
+        @endif
+=======
     <div class="coinmeal-container space-y-4 py-4 sm:space-y-5">
+>>>>>>> 980607e9b8e5596e4a05a6d50c45bece1dcc194e
 
         <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <div
@@ -161,6 +176,15 @@
             </a>
         </div>
 
+<<<<<<< HEAD
+        {{-- Recent Orders --}}
+        <p class="text-base font-bold text-gray-800">Recent Orders</p>
+        @forelse($recentOrders ?? [] as $order)
+            <div class="bg-white rounded-xl px-4 py-3 shadow-sm flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-800">{{ data_get($order, 'customer_name', 'Unknown') }}</span>
+                <span
+                    class="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full">{{ strtoupper((string) data_get($order, 'status', 'queued')) }}</span>
+=======
         <div class="flex items-center gap-2 pt-1">
             <span class="h-1 w-8 rounded-full bg-gradient-to-r from-amber-400 to-orange-400"></span>
             <p class="text-base font-bold text-gray-800">Recent orders</p>
@@ -180,6 +204,7 @@
                 <span class="text-sm font-semibold text-gray-800">{{ $order->customer_name }}</span>
                 <span
                     class="rounded-full px-3 py-1 text-xs font-bold ring-1 {{ $pill }}">{{ strtoupper($order->status) }}</span>
+>>>>>>> 980607e9b8e5596e4a05a6d50c45bece1dcc194e
             </div>
         @empty
             <div
