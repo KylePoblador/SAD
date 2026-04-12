@@ -2,3 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+    /**
+     * Main app column: full width on phones, scales up to 7xl on large desktops.
+     */
+    .coinmeal-container {
+        @apply mx-auto w-full max-w-lg px-4 sm:max-w-xl sm:px-5 md:max-w-2xl md:px-6 lg:max-w-4xl lg:px-8 xl:max-w-6xl 2xl:max-w-7xl;
+    }
+
+    /**
+     * Staff inner pages (narrower default than wallet table view).
+     */
+    .coinmeal-container-staff {
+        @apply mx-auto w-full max-w-lg px-4 sm:max-w-xl sm:px-5 md:max-w-2xl md:px-6 lg:max-w-3xl lg:px-8;
+    }
+}
+
