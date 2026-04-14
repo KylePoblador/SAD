@@ -182,10 +182,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/staff/seats/release-all', [DashboardController::class, 'releaseAllSeats'])->name('staff.seats.release-all');
 
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
-<<<<<<< HEAD
-    Route::post('/staff/feedbacks/reply/{feedbackIndex}', [DashboardController::class, 'replyFeedback'])->name('staff.feedbacks.reply');
-    Route::get('/staff/reports',   [DashboardController::class, 'reports'])->name('staff.reports');
-=======
 
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
 
@@ -262,8 +258,6 @@ Route::middleware('auth')->group(function () {
             ->with('seat', $validated['seat']);
 
     })->name('student.confirm.seat');
-
->>>>>>> 980607e9b8e5596e4a05a6d50c45bece1dcc194e
 });
 
 require __DIR__.'/auth.php';
