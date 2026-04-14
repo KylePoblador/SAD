@@ -589,19 +589,6 @@ class StudentController extends Controller
     {
         $collegeNorm = $this->assertCatalogCollege($college);
 
-        $hasSeat = DB::table('seat_reservations')
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-            ->where('user_id', auth()->id())
-            ->exists();
-
-        if (! $hasSeat) {
-            $message = 'Reserve a seat at this canteen before adding items to your cart.';
-
-            return $request->wantsJson()
-                ? response()->json(['message' => $message], 422)
-                : back()->withErrors(['cart' => $message]);
-        }
-
         $validated = $request->validate([
             'menu_item_id' => ['required', 'integer', Rule::exists('menu_items', 'id')],
         ]);

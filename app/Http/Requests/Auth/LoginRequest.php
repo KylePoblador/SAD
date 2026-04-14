@@ -46,11 +46,18 @@ class LoginRequest extends FormRequest
         $credentials = [
             'email' => $this->input('email'),
             'password' => $this->input('password'),
-            'role' => $this->input('role', 'student'),
         ];
 
         if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Invalid credentials for the selected role.',
+            ]);
+        }
+
+        if ($this->filled('role') && Auth::user()->role !== $this->input('role')) {
+            Auth::logout();
 
             throw ValidationException::withMessages([
                 'email' => 'Invalid credentials for the selected role.',

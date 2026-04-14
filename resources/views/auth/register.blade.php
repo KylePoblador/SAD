@@ -111,6 +111,7 @@
             </div>
 
             <p class="text-xs text-gray-500">Students: choose your college. Canteen staff: choose the college your canteen serves.</p>
+            <p data-staff-only class="text-xs font-medium text-amber-800 {{ $isStaff ? '' : 'hidden' }}">Only one canteen staff account is allowed per college. If your canteen already has staff, contact the administrator.</p>
 
             <div>
                 <label for="password" class="mb-1 block text-xs font-semibold text-gray-700">Password *</label>

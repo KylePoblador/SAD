@@ -83,13 +83,19 @@
             @if (! $hasReservedSeat && $menuItems->isNotEmpty())
                 <div
                     class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
-                    <p class="font-semibold">Reserve a seat to add items</p>
-                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">Ordering is unlocked after you have an
-                        active seat reservation for this canteen.</p>
+                    <p class="font-semibold">Reserve a seat before checkout</p>
+                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">You can add items to your cart anytime.
+                        To place an order, reserve a seat at this canteen first.</p>
                     <a href="{{ route('student.reserve', $college) }}"
                         class="mt-3 inline-flex w-full min-h-[44px] items-center justify-center rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 touch-manipulation sm:w-auto">
                         Reserve seat
                     </a>
+                </div>
+            @endif
+
+            @if ($errors->has('cart'))
+                <div class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+                    {{ $errors->first('cart') }}
                 </div>
             @endif
 
@@ -155,19 +161,12 @@
                                 </div>
                             </div>
                             <div class="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-                                @if ($hasReservedSeat)
-                                    <button type="button"
-                                        class="add-cart-btn min-h-[44px] w-full touch-manipulation rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:bg-green-800 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2"
-                                        data-menu-item-id="{{ $item->id }}"
-                                        onclick="addToCart(this)">
-                                        Add to cart
-                                    </button>
-                                @else
-                                    <a href="{{ route('student.reserve', $college) }}"
-                                        class="inline-flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl border-2 border-amber-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-amber-800 transition hover:bg-amber-50 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2">
-                                        Reserve seat to order
-                                    </a>
-                                @endif
+                                <button type="button"
+                                    class="add-cart-btn min-h-[44px] w-full touch-manipulation rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:bg-green-800 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2"
+                                    data-menu-item-id="{{ $item->id }}"
+                                    onclick="addToCart(this)">
+                                    Add to cart
+                                </button>
                                 <p class="text-center text-base font-bold text-green-600 sm:text-right">
                                     ₱{{ number_format($item->price, 2) }}</p>
                             </div>
@@ -244,6 +243,7 @@
                 try {
                     const res = await fetch(cartAddUrl, {
                         method: "POST",
+                        credentials: "same-origin",
                         headers: {
                             "Content-Type": "application/json",
                             "Accept": "application/json",
@@ -263,6 +263,11 @@
                         const el = document.getElementById("cart-count");
                         if (el) el.textContent = String(data.cart_count);
                     }
+                    const label = btn.textContent;
+                    btn.textContent = "Added!";
+                    setTimeout(() => {
+                        btn.textContent = label;
+                    }, 1200);
                 } catch (e) {
                     alert("Network error. Try again.");
                 } finally {
