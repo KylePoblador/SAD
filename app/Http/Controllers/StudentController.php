@@ -250,25 +250,57 @@ class StudentController extends Controller
             ->first();
 
         if (! $order || $order->status !== 'completed') {
-            return redirect()->route('student.dashboard')
-                ->with('error', 'Only completed orders can submit feedback.');
+            return redirect()->route('student.orders')
+                ->with('error', 'Only completed orders can be rated.');
+        }
+
+        if (CanteenFeedback::query()->where('order_id', $order->id)->exists()) {
+            return redirect()->route('student.orders')
+                ->with('error', 'You already submitted feedback for this order.');
         }
 
         $validated = $request->validate([
-            'feedback' => ['required', 'string', 'min:3', 'max:300'],
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'comment' => ['nullable', 'string', 'max:500'],
         ]);
+
+        $comment = isset($validated['comment']) ? trim((string) $validated['comment']) : '';
+        if ($comment !== '' && strlen($comment) < 3) {
+            return redirect()->route('student.orders')
+                ->withErrors(['comment' => 'If you add a comment, use at least 3 characters.'])
+                ->withInput();
+        }
 
         $college = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
 
         CanteenFeedback::create([
             'user_id' => (int) auth()->id(),
+            'order_id' => $order->id,
             'college' => $college,
-            'rating' => 5,
-            'comment' => $validated['feedback'],
+            'rating' => (int) $validated['rating'],
+            'comment' => $comment === '' ? null : $comment,
         ]);
 
-        return redirect()->route('student.dashboard')
-            ->with('status', 'Feedback submitted successfully.');
+        return redirect()->route('student.orders')
+            ->with('status', 'Thanks — your rating was submitted.');
+    }
+
+    public function orderReceipt(Order $order)
+    {
+        if ((int) $order->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
+        $order->load('items');
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+        $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
+        $canteenLabel = $labels[$cid] ?? strtoupper((string) $order->canteen_id);
+
+        return view('student.orders.receipt', [
+            'order' => $order,
+            'canteenLabel' => $canteenLabel,
+            'studentName' => auth()->user()->name,
+        ]);
     }
 
     public function orders()
@@ -276,7 +308,7 @@ class StudentController extends Controller
         $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
 
         $orders = Order::where('user_id', auth()->id())
-            ->with('items')
+            ->with(['items', 'feedback'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($order) use ($labels) {
@@ -589,6 +621,19 @@ class StudentController extends Controller
     {
         $collegeNorm = $this->assertCatalogCollege($college);
 
+        $hasSeat = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->exists();
+
+        if (! $hasSeat) {
+            $message = 'Reserve a seat at this canteen before adding items to your cart.';
+
+            return $request->wantsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->withErrors(['cart' => $message]);
+        }
+
         $validated = $request->validate([
             'menu_item_id' => ['required', 'integer', Rule::exists('menu_items', 'id')],
         ]);
@@ -698,7 +743,8 @@ class StudentController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($collegeNorm, $lines) {
+            /** @var Order $placedOrder One order for this canteen only; other canteen carts stay in session untouched. */
+            $placedOrder = DB::transaction(function () use ($collegeNorm, $lines) {
                 $validatedLines = [];
                 $total = 0.0;
 
@@ -747,12 +793,20 @@ class StudentController extends Controller
                 }
 
                 $this->putCartLines($collegeNorm, []);
+
+                return $order->fresh();
             });
         } catch (\RuntimeException $e) {
             return back()->withErrors(['checkout' => $e->getMessage()]);
         }
 
-        return redirect()->route('student.orders')->with('status', 'order-placed');
+        $catalog = config('canteens', []);
+        $canteenLabel = $catalog[$collegeNorm]['label'] ?? strtoupper($collegeNorm);
+
+        return redirect()->route('student.orders')
+            ->with('status', 'order-placed')
+            ->with('order_placed_canteen', $canteenLabel)
+            ->with('order_placed_id', $placedOrder->id);
     }
 
     protected function assertCatalogCollege(string $college): string

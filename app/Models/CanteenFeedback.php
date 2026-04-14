@@ -15,21 +15,36 @@ class CanteenFeedback extends Model
 
     protected $fillable = [
         'user_id',
+        'order_id',
         'college',
         'rating',
         'comment',
+        'staff_reply',
+        'staff_reply_at',
+        'staff_reply_user_id',
     ];
 
     protected function casts(): array
     {
         return [
             'rating' => 'integer',
+            'staff_reply_at' => 'datetime',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function staffReplier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'staff_reply_user_id');
     }
 
     public static function averageRatingForCollege(string $college): string

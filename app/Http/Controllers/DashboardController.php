@@ -11,7 +11,6 @@ use App\Models\WalletDepositInquiry;
 use App\Models\WalletLoadLog;
 use App\Services\InAppNotificationFeed;
 use Illuminate\Http\Request;
-
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -179,6 +178,13 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function unreadStaffNotificationCount(Request $request)
+    {
+        return response()->json([
+            'unread_count' => InAppNotificationFeed::staffUnreadCount((int) $request->user()->id),
+        ]);
+    }
+
     public function updateProfile(Request $request)
     {
         $validated = $request->validate([
@@ -285,6 +291,7 @@ class DashboardController extends Controller
             ->route('staff.orders', ['status' => $new])
             ->with('status', 'order-updated');
     }
+
     public function menu()
     {
         $collegeCode = $this->staffCollegeCode();
@@ -589,7 +596,7 @@ class DashboardController extends Controller
 
         $feedbacks = CanteenFeedback::query()
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
-            ->with('user')
+            ->with(['user', 'staffReplier', 'order'])
             ->latest()
             ->get();
 
@@ -603,7 +610,123 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function reports()   { return view('Staff.quickaction.reports'); }
+    public function replyFeedback(Request $request, CanteenFeedback $feedback)
+    {
+        $this->authorizeStaffFeedback($feedback);
+
+        $validated = $request->validate([
+            'reply' => ['required', 'string', 'min:1', 'max:1000'],
+        ]);
+
+        $feedback->update([
+            'staff_reply' => $validated['reply'],
+            'staff_reply_at' => now(),
+            'staff_reply_user_id' => Auth::id(),
+        ]);
+
+        return redirect()->route('staff.feedbacks')
+            ->with('status', 'Reply saved.');
+    }
+
+    public function reports(Request $request)
+    {
+        return view('Staff.quickaction.reports', $this->buildReportData($request));
+    }
+
+    public function reportsPrint(Request $request)
+    {
+        return view('Staff.quickaction.reports-print', $this->buildReportData($request));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function buildReportData(Request $request): array
+    {
+        $collegeCode = $this->staffCollegeCode();
+        $catalog = config('canteens', []);
+        $canteenName = $catalog[$collegeCode]['label'] ?? 'Your canteen';
+
+        $validated = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $baseOrders = Order::query()
+            ->whereRaw('LOWER(TRIM(canteen_id)) = ?', [$collegeCode]);
+
+        if (! empty($validated['from'])) {
+            $baseOrders->whereDate('created_at', '>=', $validated['from']);
+        }
+        if (! empty($validated['to'])) {
+            $baseOrders->whereDate('created_at', '<=', $validated['to']);
+        }
+
+        $completedStatuses = ['completed', 'success', 'successful'];
+        $cancelledStatuses = ['cancelled', 'canceled', 'cancel'];
+
+        $totalOrders = (clone $baseOrders)->count();
+        $successfulOrdersCount = (clone $baseOrders)->whereIn('status', $completedStatuses)->count();
+        $cancelledOrdersCount = (clone $baseOrders)->whereIn('status', $cancelledStatuses)->count();
+
+        $totalIncome = (float) (clone $baseOrders)->whereIn('status', $completedStatuses)->sum('total');
+        $cancelledAmount = (float) (clone $baseOrders)->whereIn('status', $cancelledStatuses)->sum('total');
+
+        $successfulOrders = (clone $baseOrders)
+            ->whereIn('status', $completedStatuses)
+            ->with(['user', 'items'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $cancelledOrders = (clone $baseOrders)
+            ->whereIn('status', $cancelledStatuses)
+            ->with(['user', 'items'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $topItemsQuery = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereRaw('LOWER(TRIM(orders.canteen_id)) = ?', [$collegeCode])
+            ->whereIn('orders.status', $completedStatuses);
+
+        if (! empty($validated['from'])) {
+            $topItemsQuery->whereDate('orders.created_at', '>=', $validated['from']);
+        }
+        if (! empty($validated['to'])) {
+            $topItemsQuery->whereDate('orders.created_at', '<=', $validated['to']);
+        }
+
+        $topItems = $topItemsQuery
+            ->selectRaw('order_items.name as name, SUM(order_items.qty) as sold, SUM(order_items.qty * order_items.price) as total')
+            ->groupBy('order_items.name')
+            ->orderByDesc('sold')
+            ->limit(10)
+            ->get();
+
+        return [
+            'canteenName' => $canteenName,
+            'collegeCode' => strtoupper($collegeCode),
+            'from' => $validated['from'] ?? null,
+            'to' => $validated['to'] ?? null,
+            'totalOrders' => $totalOrders,
+            'successfulOrdersCount' => $successfulOrdersCount,
+            'cancelledOrdersCount' => $cancelledOrdersCount,
+            'totalIncome' => $totalIncome,
+            'cancelledAmount' => $cancelledAmount,
+            'successfulOrders' => $successfulOrders,
+            'cancelledOrders' => $cancelledOrders,
+            'topItems' => $topItems,
+        ];
+    }
+
+    protected function authorizeStaffFeedback(CanteenFeedback $feedback): void
+    {
+        $mine = UserCanteenBalance::normalizedCollege($this->staffCollegeCode());
+        $fbCollege = UserCanteenBalance::normalizedCollege((string) $feedback->college);
+        if ($fbCollege !== $mine) {
+            abort(403);
+        }
+    }
 
     protected function staffCollegeCode(): string
     {

@@ -111,8 +111,8 @@
                         Place order
                     </button>
                 </form>
-                <p class="mt-2 text-center text-[11px] text-gray-400">Total is charged to this canteen’s wallet only.
-                </p>
+                <p class="mt-2 text-center text-[11px] text-gray-400">This checkout creates <strong>one order</strong> for
+                    <strong>{{ $canteenName }}</strong> only. Other canteens’ carts are unchanged and get their own order and receipt when you check out there.</p>
             </div>
         @endif
     </div>

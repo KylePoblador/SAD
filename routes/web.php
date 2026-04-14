@@ -4,10 +4,12 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
 use App\Models\ActivityNotification;
+use App\Models\UserCanteenBalance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\Rule;
 
 Route::get('/', function () {
     return view('welcome');
@@ -76,6 +78,10 @@ Route::get('/student/profile', [StudentController::class, 'profile'])
 Route::get('/student/orders', [StudentController::class, 'orders'])
     ->middleware(['auth', 'verified'])
     ->name('student.orders');
+
+Route::get('/student/orders/{order}/receipt', [StudentController::class, 'orderReceipt'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.orders.receipt');
 
 Route::get('/student/wallet', [StudentController::class, 'wallet'])
     ->middleware(['auth', 'verified'])
@@ -168,6 +174,8 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/staff/notification/clear-all', [DashboardController::class, 'clearAllStaffNotifications'])
         ->name('staff.notification.clear-all');
+    Route::get('/staff/unread-count', [DashboardController::class, 'unreadStaffNotificationCount'])
+        ->name('staff.unread-count');
 
     Route::get('/staff/menu', [DashboardController::class, 'menu'])->name('staff.menu');
     Route::post('/staff/menu', [DashboardController::class, 'storeMenuItem'])->name('staff.menu.store');
@@ -182,8 +190,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/staff/seats/release-all', [DashboardController::class, 'releaseAllSeats'])->name('staff.seats.release-all');
 
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
+    Route::post('/staff/feedbacks/{feedback}/reply', [DashboardController::class, 'replyFeedback'])->name('staff.feedbacks.reply');
 
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
+    Route::get('/staff/reports/print', [DashboardController::class, 'reportsPrint'])->name('staff.reports.print');
 
     Route::patch('/staff/deposit-inquiries/{walletDepositInquiry}/done', [DashboardController::class, 'completeDepositInquiry'])
         ->name('staff.deposit-inquiry.done');
@@ -205,25 +215,40 @@ Route::middleware('auth')->group(function () {
     Route::post('/student/cart/{college}/checkout', [StudentController::class, 'cartCheckout'])->name('student.cart.checkout');
 
     Route::get('/student/reserve/{college}', function ($college) {
+        $collegeNorm = UserCanteenBalance::normalizedCollege((string) $college);
+        if (! array_key_exists($collegeNorm, config('canteens', []))) {
+            abort(404);
+        }
+
         $occupied = DB::table('seat_reservations')
-            ->where('college', $college)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->pluck('seat_number')
             ->all();
 
         return view('student.reservation.reserve', [
-            'college' => $college,
+            'college' => $collegeNorm,
             'occupied' => $occupied,
         ]);
     })->name('student.reserve');
 
     Route::post('/student/confirm-seat', function (Request $request) {
+        $canteenKeys = array_keys(config('canteens', []));
+        $request->merge([
+            'college' => UserCanteenBalance::normalizedCollege((string) $request->input('college', '')),
+        ]);
+
         $validated = $request->validate([
-            'college' => ['required', 'string'],
+            'college' => ['required', 'string', Rule::in($canteenKeys)],
             'seat' => ['required', 'integer', 'between:1,25'],
         ]);
 
+        $collegeNorm = UserCanteenBalance::normalizedCollege((string) $validated['college']);
+        if (! array_key_exists($collegeNorm, config('canteens', []))) {
+            abort(404);
+        }
+
         $alreadyTaken = DB::table('seat_reservations')
-            ->where('college', $validated['college'])
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->where('seat_number', $validated['seat'])
             ->where('user_id', '!=', $request->user()->id)
             ->exists();
@@ -232,19 +257,22 @@ Route::middleware('auth')->group(function () {
             return back()->with('error', 'Seat is already reserved. Please choose another seat.');
         }
 
-        DB::table('seat_reservations')->updateOrInsert(
-            [
-                'user_id' => $request->user()->id,
-                'college' => $validated['college'],
-            ],
-            [
-                'seat_number' => $validated['seat'],
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
-        );
+        DB::transaction(function () use ($request, $collegeNorm, $validated) {
+            DB::table('seat_reservations')
+                ->where('user_id', $request->user()->id)
+                ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+                ->delete();
 
-        $canteenLabel = config('canteens')[$validated['college']]['label'] ?? $validated['college'];
+            DB::table('seat_reservations')->insert([
+                'user_id' => $request->user()->id,
+                'college' => $collegeNorm,
+                'seat_number' => $validated['seat'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        $canteenLabel = config('canteens')[$collegeNorm]['label'] ?? $collegeNorm;
         ActivityNotification::notifyUser(
             $request->user()->id,
             ActivityNotification::TYPE_SEAT_RESERVED,
@@ -254,7 +282,7 @@ Route::middleware('auth')->group(function () {
         );
 
         return redirect()
-            ->route('student.canteen', ['college' => $validated['college']])
+            ->route('student.canteen', ['college' => $collegeNorm])
             ->with('seat', $validated['seat']);
 
     })->name('student.confirm.seat');

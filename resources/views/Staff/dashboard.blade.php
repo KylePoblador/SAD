@@ -13,8 +13,11 @@
     class="min-h-screen bg-gradient-to-b from-emerald-50/90 via-white to-sky-50/40 pb-24 font-sans text-gray-900 antialiased">
 
     <header class="sticky top-0 z-10 border-b border-emerald-100/80 bg-white/90 shadow-sm backdrop-blur-sm">
-        <div class="coinmeal-container flex items-center justify-between py-3">
-        <div>
+        <div class="coinmeal-container flex items-start justify-between gap-3 py-3">
+        <div class="min-w-0">
+            <div class="mb-1">
+                @include('partials.app-back-link', ['href' => url('/'), 'variant' => 'staff', 'label' => 'Back'])
+            </div>
             <h1 class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-lg font-bold text-transparent">
                 {{ $staffCollegeName ?? 'Assigned canteen' }}</h1>
             <p class="text-xs font-medium text-gray-500">Staff dashboard</p>
@@ -23,11 +26,13 @@
             @endif
         </div>
         <a href="{{ route('staff.notification') }}"
-            class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100">
+            class="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
+            <span id="staff-unread-badge"
+                class="absolute -right-1 -top-1 hidden h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">0</span>
         </a>
         </div>
     </header>
@@ -233,6 +238,40 @@
             Profile
         </a>
     </nav>
+
+    <script>
+        (function() {
+            const badge = document.getElementById('staff-unread-badge');
+            const endpoint = @json(route('staff.unread-count'));
+            if (!badge || !endpoint) return;
+
+            async function updateStaffUnreadBadge() {
+                try {
+                    const response = await fetch(endpoint, {
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                        },
+                    });
+                    const data = await response.json();
+                    const count = Number(data.unread_count || 0);
+                    if (count > 0) {
+                        badge.textContent = count > 99 ? '99+' : String(count);
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                    } else {
+                        badge.classList.add('hidden');
+                        badge.classList.remove('flex');
+                    }
+                } catch (e) {
+                    // Ignore badge polling errors.
+                }
+            }
+
+            updateStaffUnreadBadge();
+            setInterval(updateStaffUnreadBadge, 5000);
+        })();
+    </script>
 </body>
 
 </html>

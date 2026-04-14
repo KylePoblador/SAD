@@ -7,20 +7,8 @@
         {{-- Page header --}}
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                    <a href="{{ route('student.dashboard') }}"
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-green-600"
-                        aria-label="Back to home">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                    </a>
-                    <div class="min-w-0">
-                        <h1 class="truncate text-lg font-bold text-gray-900 sm:text-xl">{{ $canteenName }}</h1>
-                        <p class="text-xs font-medium text-gray-500">{{ strtoupper($college) }}</p>
-                    </div>
-                </div>
+                <h1 class="truncate text-lg font-bold text-gray-900 sm:text-xl">{{ $canteenName }}</h1>
+                <p class="text-xs font-medium text-gray-500">{{ strtoupper($college) }}</p>
             </div>
             <a href="{{ route('student.cart', $college) }}"
                 class="flex shrink-0 flex-col items-end gap-0.5 rounded-lg p-1 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
@@ -83,9 +71,9 @@
             @if (! $hasReservedSeat && $menuItems->isNotEmpty())
                 <div
                     class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
-                    <p class="font-semibold">Reserve a seat before checkout</p>
-                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">You can add items to your cart anytime.
-                        To place an order, reserve a seat at this canteen first.</p>
+                    <p class="font-semibold">Reserve a seat to add items</p>
+                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">You need an active seat reservation at this
+                        canteen before you can add food to your cart or check out.</p>
                     <a href="{{ route('student.reserve', $college) }}"
                         class="mt-3 inline-flex w-full min-h-[44px] items-center justify-center rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 touch-manipulation sm:w-auto">
                         Reserve seat
@@ -161,12 +149,19 @@
                                 </div>
                             </div>
                             <div class="flex w-full shrink-0 flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-                                <button type="button"
-                                    class="add-cart-btn min-h-[44px] w-full touch-manipulation rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:bg-green-800 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2"
-                                    data-menu-item-id="{{ $item->id }}"
-                                    onclick="addToCart(this)">
-                                    Add to cart
-                                </button>
+                                @if ($hasReservedSeat)
+                                    <button type="button"
+                                        class="add-cart-btn min-h-[44px] w-full touch-manipulation rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 active:bg-green-800 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2"
+                                        data-menu-item-id="{{ $item->id }}"
+                                        onclick="addToCart(this)">
+                                        Add to cart
+                                    </button>
+                                @else
+                                    <a href="{{ route('student.reserve', $college) }}"
+                                        class="inline-flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl border-2 border-amber-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-amber-800 transition hover:bg-amber-50 sm:min-h-0 sm:w-auto sm:px-4 sm:py-2">
+                                        Reserve seat to order
+                                    </a>
+                                @endif
                                 <p class="text-center text-base font-bold text-green-600 sm:text-right">
                                     ₱{{ number_format($item->price, 2) }}</p>
                             </div>

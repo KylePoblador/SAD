@@ -1,9 +1,16 @@
 <x-layouts.student title="Cart" active="cart">
     <div class="space-y-4 sm:space-y-5">
         <div>
-            <h1 class="text-lg font-bold text-gray-900 sm:text-xl">Your cart</h1>
-            <p class="mt-1 text-xs text-gray-500 sm:text-sm">Open a canteen cart to review items and check out.</p>
+            <h1 class="text-lg font-bold text-gray-900 sm:text-xl">Your carts</h1>
+            <p class="mt-1 text-xs text-gray-500 sm:text-sm">Each canteen has its own cart. Checking out in one canteen creates <strong>one order</strong> for that canteen only — other carts stay as they are until you check out there.</p>
         </div>
+
+        @if (count($carts ?? []) > 1)
+            <div class="rounded-2xl border border-blue-100 bg-blue-50/90 px-4 py-3 text-xs leading-relaxed text-blue-950">
+                <p class="font-semibold text-blue-900">Multiple canteens</p>
+                <p class="mt-1">You will get <strong>separate orders and separate receipts</strong> (one per canteen when you tap Place order).</p>
+            </div>
+        @endif
 
         @forelse ($carts as $row)
             <a href="{{ route('student.cart', $row['college']) }}"

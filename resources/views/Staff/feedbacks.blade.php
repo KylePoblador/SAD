@@ -15,12 +15,20 @@
 
 <body class="min-h-screen bg-gray-100 pb-20" style="font-family: 'Figtree', sans-serif;">
     <div class="bg-green-500 px-4 py-4 text-white sticky top-0 z-10">
-        <div class="flex items-center justify-between max-w-lg mx-auto">
-            <div>
+        <div class="flex flex-wrap items-start justify-between gap-3 max-w-lg mx-auto">
+            <div class="min-w-0">
+                <div class="mb-2">
+                    <a href="{{ route('staff.dashboard') }}"
+                        class="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back
+                    </a>
+                </div>
                 <h1 class="text-lg font-bold">CEIT Main Canteen</h1>
                 <p class="text-xs opacity-85">Completed Order Feedbacks</p>
             </div>
-            <a href="{{ route('dashboard') }}" class="text-xs font-semibold underline">Back</a>
         </div>
     </div>
 

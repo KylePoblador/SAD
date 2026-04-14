@@ -3,6 +3,9 @@
 @section('title', 'Reserve a seat')
 
 @section('content')
+    <div class="mb-4">
+        @include('partials.app-back-link', ['href' => route('student.canteen', ['college' => $college]), 'variant' => 'student'])
+    </div>
     <div class="text-center">
         <h1 class="text-lg font-bold text-gray-900">Select your seat</h1>
         @php
