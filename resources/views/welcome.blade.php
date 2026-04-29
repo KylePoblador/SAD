@@ -26,7 +26,7 @@
             <p class="mt-4 text-base text-[#6b7b6f]">Choose how you'd like to continue</p>
 
             <div class="mt-10 space-y-4 text-left">
-                <a href="{{ route('login', ['role' => 'student']) }}"
+                <a href="{{ route('continue-as', ['role' => 'student']) }}"
                     class="block rounded-2xl border border-[#95cfa2] bg-[#a9d5ae] px-5 py-4 shadow-[0_6px_14px_rgba(46,112,57,0.12)] transition hover:-translate-y-0.5">
                     <div class="flex items-start gap-4">
                         <span
@@ -39,7 +39,7 @@
                     </div>
                 </a>
 
-                <a href="{{ route('login', ['role' => 'staff']) }}"
+                <a href="{{ route('continue-as', ['role' => 'staff']) }}"
                     class="block rounded-2xl border border-[#ecc084] bg-[#efce9d] px-5 py-4 shadow-[0_6px_14px_rgba(131,87,20,0.12)] transition hover:-translate-y-0.5">
                     <div class="flex items-start gap-4">
                         <span
@@ -47,6 +47,18 @@
                         <span>
                             <span class="block text-2xl font-semibold text-[#3a2f1b]">Canteen Staff</span>
                             <span class="mt-1 block text-sm text-[#6f5c3a]">Manage orders, menu &amp; inventory.</span>
+                        </span>
+                    </div>
+                </a>
+
+                <a href="{{ route('continue-as', ['role' => 'admin']) }}"
+                    class="block rounded-2xl border border-[#b9b3ff] bg-[#d4d2ff] px-5 py-4 shadow-[0_6px_14px_rgba(60,53,140,0.12)] transition hover:-translate-y-0.5">
+                    <div class="flex items-start gap-4">
+                        <span
+                            class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#6b63d6] text-white">🛡</span>
+                        <span>
+                            <span class="block text-2xl font-semibold text-[#2f2a63]">Admin</span>
+                            <span class="mt-1 block text-sm text-[#4b4780]">Monitor users and manage coupons.</span>
                         </span>
                     </div>
                 </a>

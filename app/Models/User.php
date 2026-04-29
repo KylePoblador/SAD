@@ -22,6 +22,9 @@ class User extends Authenticatable
         'phone',
         'student_id',
         'canteen_name',
+        'last_login_at',
+        'is_inactive',
+        'inactive_labeled_at',
     ];
 
     protected $hidden = [
@@ -35,6 +38,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'notification_feed_cleared_at' => 'datetime',
+            'last_login_at' => 'datetime',
+            'inactive_labeled_at' => 'datetime',
+            'is_inactive' => 'boolean',
         ];
     }
 

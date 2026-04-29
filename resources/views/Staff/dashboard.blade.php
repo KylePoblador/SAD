@@ -15,9 +15,6 @@
     <header class="sticky top-0 z-10 border-b border-emerald-100/80 bg-white/90 shadow-sm backdrop-blur-sm">
         <div class="coinmeal-container flex items-start justify-between gap-3 py-3">
         <div class="min-w-0">
-            <div class="mb-1">
-                @include('partials.app-back-link', ['href' => url('/'), 'variant' => 'staff', 'label' => 'Back'])
-            </div>
             <h1 class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-lg font-bold text-transparent">
                 {{ $staffCollegeName ?? 'Assigned canteen' }}</h1>
             <p class="text-xs font-medium text-gray-500">Staff dashboard</p>
@@ -163,6 +160,16 @@
                     </svg>
                 </span>
                 <span class="text-sm font-bold text-violet-900">Feedbacks</span>
+            </a>
+            <a href="{{ route('staff.qr.scanner') }}"
+                class="group flex flex-col items-center gap-2 rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-white to-purple-50/30 p-4 text-center shadow-sm transition hover:border-indigo-400 hover:shadow-md">
+                <span
+                    class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-md transition group-hover:scale-105">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h3v3H7V7zm7 0h3v3h-3V7zM7 14h3v3H7v-3zm7 2h3m-3-2h3v5h-5v-3m-2 3H5V5h14v5" />
+                    </svg>
+                </span>
+                <span class="text-sm font-bold text-indigo-900">QR scanner</span>
             </a>
             <a href="{{ route('staff.reports') }}"
                 class="group flex flex-col items-center gap-2 rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 via-white to-slate-50/30 p-4 text-center shadow-sm transition hover:border-indigo-400 hover:shadow-md">

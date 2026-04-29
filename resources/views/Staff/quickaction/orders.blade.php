@@ -47,6 +47,7 @@
                     <p class="font-bold text-gray-900">{{ $order->user->name ?? 'Unknown' }}</p>
                     <p class="mt-1 text-xs text-gray-500">Student #{{ $order->user->id ?? '—' }}</p>
                     <p class="text-xs text-gray-500">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
+                    <p class="text-xs text-gray-500">Mode: {{ strtoupper(str_replace('_', ' ', $order->order_mode ?? 'dine_in')) }}</p>
                     <p class="text-xs text-gray-400">{{ $order->created_at?->format('M j, Y g:i A') }}</p>
                 </div>
                 <div class="flex shrink-0 flex-col items-end gap-2">

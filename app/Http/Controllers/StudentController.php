@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityNotification;
 use App\Models\CanteenFeedback;
+use App\Models\CoinTransfer;
+use App\Models\Coupon;
 use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentReceipt;
+use App\Models\QrPaymentToken;
 use App\Models\User;
 use App\Models\UserCanteenBalance;
 use App\Models\WalletDepositInquiry;
@@ -14,6 +18,8 @@ use App\Models\WalletLoadLog;
 use App\Services\InAppNotificationFeed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
@@ -21,6 +27,13 @@ class StudentController extends Controller
     public function index()
     {
         $user = auth()->user();
+        $role = strtolower(trim((string) ($user->role ?? 'student')));
+        if ($role === 'admin') {
+            return redirect()->route('admin.dashboard');
+        }
+        if ($role === 'staff') {
+            return redirect()->route('staff.dashboard');
+        }
         $catalog = config('canteens', []);
 
         $staffByCollege = User::query()
@@ -256,7 +269,9 @@ class StudentController extends Controller
                 ->with('error', 'Only completed orders can be rated.');
         }
 
-        if (CanteenFeedback::query()->where('order_id', $order->id)->exists()) {
+        $hasOrderIdColumn = Schema::hasColumn('canteen_feedbacks', 'order_id');
+
+        if ($hasOrderIdColumn && CanteenFeedback::query()->where('order_id', $order->id)->exists()) {
             return redirect()->route('student.orders')
                 ->with('error', 'You already submitted feedback for this order.');
         }
@@ -275,13 +290,17 @@ class StudentController extends Controller
 
         $college = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
 
-        CanteenFeedback::create([
+        $payload = [
             'user_id' => (int) auth()->id(),
-            'order_id' => $order->id,
             'college' => $college,
             'rating' => (int) $validated['rating'],
             'comment' => $comment === '' ? null : $comment,
-        ]);
+        ];
+        if ($hasOrderIdColumn) {
+            $payload['order_id'] = $order->id;
+        }
+
+        CanteenFeedback::create($payload);
 
         return redirect()->route('student.orders')
             ->with('status', 'Thanks — your rating was submitted.');
@@ -308,13 +327,23 @@ class StudentController extends Controller
     {
         $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
 
-        $orders = Order::where('user_id', auth()->id())
-            ->with(['items', 'feedback'])
-            ->orderBy('created_at', 'desc')
+        $ordersQuery = Order::where('user_id', auth()->id())
+            ->with('items')
+            ->orderBy('created_at', 'desc');
+        if (Schema::hasColumn('canteen_feedbacks', 'order_id')) {
+            $ordersQuery->with('feedback');
+        }
+
+        $hasOrderIdColumn = Schema::hasColumn('canteen_feedbacks', 'order_id');
+
+        $orders = $ordersQuery
             ->get()
-            ->map(function ($order) use ($labels) {
+            ->map(function ($order) use ($labels, $hasOrderIdColumn) {
                 $cid = $order->canteen_id;
                 $order->canteen = $labels[$cid] ?? (is_string($cid) ? strtoupper($cid) : 'Canteen');
+                if (! $hasOrderIdColumn) {
+                    $order->setRelation('feedback', null);
+                }
 
                 return $order;
             });
@@ -348,6 +377,56 @@ class StudentController extends Controller
                     'date' => $order->created_at->format('M d, Y H:i'),
                 ];
             })
+            ->values()
+            ->toArray();
+
+        $transferTransactions = [];
+        if (Schema::hasTable('coin_transfers')) {
+            $transferTransactions = CoinTransfer::query()
+                ->where(function ($q) use ($user) {
+                    $q->where('sender_user_id', $user->id)->orWhere('receiver_user_id', $user->id);
+                })
+                ->latest()
+                ->take(10)
+                ->get()
+                ->map(function (CoinTransfer $transfer) use ($user) {
+                    $isSender = (int) $transfer->sender_user_id === (int) $user->id;
+                    $peer = $isSender ? $transfer->receiver : $transfer->sender;
+
+                    return [
+                        'description' => ($isSender ? 'Shared to ' : 'Received from ').($peer->name ?? 'user'),
+                        'amount' => (float) $transfer->amount,
+                        'type' => $isSender ? 'debit' : 'credit',
+                        'date' => $transfer->created_at->format('M d, Y H:i'),
+                    ];
+                })
+                ->toArray();
+        }
+
+        $receiptTransactions = [];
+        if (Schema::hasTable('payment_receipts')) {
+            $receiptTransactions = PaymentReceipt::query()
+                ->where('user_id', (int) $user->id)
+                ->latest('paid_at')
+                ->take(10)
+                ->get()
+                ->map(function (PaymentReceipt $receipt) {
+                    return [
+                        'description' => 'QR receipt '.$receipt->receipt_number,
+                        'amount' => (float) $receipt->amount,
+                        'type' => 'debit',
+                        'date' => ($receipt->paid_at ?? $receipt->created_at)?->format('M d, Y H:i'),
+                        'receipt_url' => route('student.wallet.receipts.show', $receipt),
+                    ];
+                })
+                ->toArray();
+        }
+
+        $recentTransactions = collect($recentTransactions)
+            ->merge($transferTransactions)
+            ->merge($receiptTransactions)
+            ->sortByDesc(fn ($row) => strtotime((string) $row['date']))
+            ->take(12)
             ->values()
             ->toArray();
 
@@ -388,9 +467,19 @@ class StudentController extends Controller
             'recent_transactions' => $recentTransactions,
         ];
 
+        $connectRecipients = User::query()
+            ->where('id', '!=', (int) $user->id)
+            ->where('role', 'student')
+            ->select('id', 'name', 'email', 'student_id')
+            ->orderBy('name')
+            ->limit(30)
+            ->get();
+
         return view('student.wallet', [
             'wallet' => $wallet,
             'topUpCanteens' => $this->topUpCanteenOptions(),
+            'canSendCoinsFrom' => collect($wallet['canteen_balances'])->where('balance', '>', 0)->values()->all(),
+            'connectRecipients' => $connectRecipients,
         ]);
     }
 
@@ -729,13 +818,27 @@ class StudentController extends Controller
     {
         $collegeNorm = $this->assertCatalogCollege($college);
 
+        $validatedRequest = $request->validate([
+            'order_mode' => ['required', Rule::in(['dine_in', 'takeout'])],
+            'coupon_code' => ['nullable', 'string', 'max:32'],
+        ]);
+        $orderMode = $validatedRequest['order_mode'];
+
         $hasSeat = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->where('user_id', auth()->id())
             ->exists();
 
-        if (! $hasSeat) {
+        if ($orderMode === 'dine_in' && ! $hasSeat) {
             return back()->withErrors(['checkout' => 'Reserve a seat before placing an order.']);
+        }
+
+        $seatNumber = null;
+        if ($orderMode === 'dine_in') {
+            $seatNumber = DB::table('seat_reservations')
+                ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+                ->where('user_id', auth()->id())
+                ->value('seat_number');
         }
 
         $lines = $this->getCartLines($collegeNorm);
@@ -745,7 +848,7 @@ class StudentController extends Controller
 
         try {
             /** @var Order $placedOrder One order for this canteen only; other canteen carts stay in session untouched. */
-            $placedOrder = DB::transaction(function () use ($collegeNorm, $lines) {
+            $placedOrder = DB::transaction(function () use ($collegeNorm, $lines, $validatedRequest, $orderMode, $seatNumber) {
                 $validatedLines = [];
                 $total = 0.0;
 
@@ -769,16 +872,63 @@ class StudentController extends Controller
                     throw new \RuntimeException('Your cart is empty.');
                 }
 
-                UserCanteenBalance::subtract((int) auth()->id(), $collegeNorm, $total);
+                $coupon = null;
+                $discount = 0.0;
+                if (! empty($validatedRequest['coupon_code']) && Schema::hasTable('coupons')) {
+                    $coupon = Coupon::query()
+                        ->where('code', strtoupper(trim((string) $validatedRequest['coupon_code'])))
+                        ->where('is_active', true)
+                        ->first();
+                    if ($coupon) {
+                        $now = now();
+                        if (($coupon->starts_at && $now->lt($coupon->starts_at))
+                            || ($coupon->ends_at && $now->gt($coupon->ends_at))
+                            || ((float) $coupon->min_order_total > $total + 1e-6)
+                            || ($coupon->usage_limit !== null && (int) $coupon->used_count >= (int) $coupon->usage_limit)) {
+                            $coupon = null;
+                        }
+                    }
+                    if ($coupon) {
+                        $discount = $coupon->type === 'percent'
+                            ? round($total * ((float) $coupon->value / 100), 2)
+                            : round((float) $coupon->value, 2);
+                        $discount = min($discount, $total);
+                    }
+                }
+                $payable = max(round($total - $discount, 2), 0.0);
 
-                $order = Order::create([
+                if ($payable > 0) {
+                    UserCanteenBalance::subtract((int) auth()->id(), $collegeNorm, $payable);
+                }
+
+                $orderPayload = [
                     'user_id' => auth()->id(),
                     'order_number' => null,
                     'status' => 'pending',
                     'total' => $total,
                     'canteen_id' => $collegeNorm,
                     'is_read' => false,
-                ]);
+                ];
+                if (Schema::hasColumn('orders', 'discount_amount')) {
+                    $orderPayload['discount_amount'] = $discount;
+                }
+                if (Schema::hasColumn('orders', 'payable_total')) {
+                    $orderPayload['payable_total'] = $payable;
+                }
+                if (Schema::hasColumn('orders', 'coupon_id')) {
+                    $orderPayload['coupon_id'] = $coupon?->id;
+                }
+                if (Schema::hasColumn('orders', 'order_mode')) {
+                    $orderPayload['order_mode'] = $orderMode;
+                }
+                if (Schema::hasColumn('orders', 'seat_number')) {
+                    $orderPayload['seat_number'] = $seatNumber;
+                }
+
+                $order = Order::create($orderPayload);
+                if ($coupon) {
+                    $coupon->increment('used_count');
+                }
 
                 $order->update([
                     'order_number' => 'ORD-'.now()->format('Ymd').'-'.str_pad((string) $order->id, 4, '0', STR_PAD_LEFT),
@@ -808,6 +958,129 @@ class StudentController extends Controller
             ->with('status', 'order-placed')
             ->with('order_placed_canteen', $canteenLabel)
             ->with('order_placed_id', $placedOrder->id);
+    }
+
+    public function generateOrderQr(Order $order)
+    {
+        if ((int) $order->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+        if (! Schema::hasTable('qr_payment_tokens')) {
+            return back()->with('error', 'QR feature is not ready. Run migrations first.');
+        }
+
+        $token = QrPaymentToken::query()->create([
+            'order_id' => $order->id,
+            'issued_by_user_id' => auth()->id(),
+            'token' => Str::random(48),
+            'expires_at' => now()->addMinutes(20),
+        ]);
+
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+        $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
+        $canteenLabel = $labels[$cid] ?? strtoupper((string) $order->canteen_id);
+
+        return view('student.orders.qr', [
+            'order' => $order,
+            'canteenLabel' => $canteenLabel,
+            'studentName' => auth()->user()->name,
+            'qrToken' => $token->token,
+        ]);
+    }
+
+    public function connectSearch(Request $request)
+    {
+        $term = trim((string) $request->query('q', ''));
+        if (strlen($term) < 2) {
+            return response()->json(['items' => []]);
+        }
+
+        $usersTable = (new User)->getTable();
+        $hasUsername = Schema::hasColumn($usersTable, 'username');
+
+        $items = User::query()
+            ->where('id', '!=', auth()->id())
+            ->where(function ($q) use ($term, $hasUsername) {
+                $q->where('name', 'like', '%'.$term.'%')
+                    ->orWhere('email', 'like', '%'.$term.'%')
+                    ->orWhere('student_id', 'like', '%'.$term.'%');
+                if ($hasUsername) {
+                    $q->orWhere('username', 'like', '%'.$term.'%');
+                }
+            })
+            ->select('id', 'name', 'email', 'student_id')
+            ->when($hasUsername, fn ($q) => $q->addSelect('username'))
+            ->limit(20)
+            ->get();
+
+        return response()->json(['items' => $items]);
+    }
+
+    public function sendCoins(Request $request)
+    {
+        if (! Schema::hasTable('coin_transfers')) {
+            return back()->withErrors(['connect' => 'Connect feature is not ready. Run migrations first.']);
+        }
+
+        $validated = $request->validate([
+            'receiver_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
+            'college' => ['required', 'string', Rule::in(array_keys(config('canteens', [])))],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'note' => ['nullable', 'string', 'max:300'],
+        ]);
+
+        if ((int) $validated['receiver_user_id'] === (int) auth()->id()) {
+            return back()->withErrors(['connect' => 'You cannot transfer coins to yourself.']);
+        }
+
+        $sender = auth()->user();
+        $receiver = User::query()->findOrFail((int) $validated['receiver_user_id']);
+        $senderCollege = UserCanteenBalance::normalizedCollege((string) ($sender->college ?? ''));
+        $receiverCollege = UserCanteenBalance::normalizedCollege((string) ($receiver->college ?? ''));
+        $transferCollege = UserCanteenBalance::normalizedCollege((string) $validated['college']);
+
+        if ($transferCollege === 'ceit' && ($senderCollege !== 'ceit' || $receiverCollege !== 'ceit')) {
+            return back()->withErrors([
+                'connect' => 'CEIT coins can only be transferred between users from CEIT. Choose another wallet balance for non-CEIT users.',
+            ]);
+        }
+
+        try {
+            DB::transaction(function () use ($validated, $transferCollege) {
+                UserCanteenBalance::subtract((int) auth()->id(), $transferCollege, (float) $validated['amount']);
+                UserCanteenBalance::add((int) $validated['receiver_user_id'], $transferCollege, (float) $validated['amount']);
+
+                CoinTransfer::query()->create([
+                    'sender_user_id' => auth()->id(),
+                    'receiver_user_id' => (int) $validated['receiver_user_id'],
+                    'college' => $transferCollege,
+                    'amount' => (float) $validated['amount'],
+                    'note' => $validated['note'] ?? null,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['connect' => $e->getMessage()]);
+        }
+
+        return back()->with('status', 'coins-shared');
+    }
+
+    public function showWalletReceipt(PaymentReceipt $receipt)
+    {
+        if ((int) $receipt->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
+        $order = $receipt->order()->with('items')->first();
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+        $cid = UserCanteenBalance::normalizedCollege((string) ($receipt->canteen_id ?: $order?->canteen_id));
+
+        return view('student.receipts.show', [
+            'receipt' => $receipt,
+            'order' => $order,
+            'canteenLabel' => $labels[$cid] ?? strtoupper((string) $cid),
+            'studentName' => auth()->user()->name,
+        ]);
     }
 
     protected function assertCatalogCollege(string $college): string

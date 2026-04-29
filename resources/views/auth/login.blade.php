@@ -19,8 +19,10 @@
     @php
         $role = old('role', $selectedRole ?? request('role', 'student'));
         $isStaff = $role === 'staff';
-        $headerColor = $isStaff ? 'from-orange-600 to-orange-500' : 'from-green-600 to-green-500';
-        $buttonColor = $isStaff ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600';
+        $isAdmin = $role === 'admin';
+        $headerColor = $isAdmin ? 'from-indigo-600 to-indigo-500' : ($isStaff ? 'from-orange-600 to-orange-500' : 'from-green-600 to-green-500');
+        $buttonColor = $isAdmin ? 'bg-indigo-500 hover:bg-indigo-600' : ($isStaff ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600');
+        $roleLabel = $isAdmin ? 'Admin' : ($isStaff ? 'Canteen Staff' : 'Student');
     @endphp
 
     <div class="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-green-300/30 blur-3xl"></div>
@@ -36,7 +38,7 @@
                 <span class="text-xl">🍽️</span>
             </div>
             <h1 class="text-center text-3xl font-bold">Welcome to CoinMeal</h1>
-            <p class="mt-1 text-center text-sm text-white/90">Sign in as {{ $isStaff ? 'Canteen Staff' : 'Student' }}
+            <p class="mt-1 text-center text-sm text-white/90">Sign in as {{ $roleLabel }}
             </p>
         </div>
 
@@ -95,11 +97,17 @@
                 </button>
             </form>
 
-            <p class="mt-5 text-center text-sm text-gray-600">
-                Don't have an account?
-                <a href="{{ route('register', ['role' => $role]) }}"
-                    class="font-semibold text-green-700 hover:underline">Create an account</a>
-            </p>
+            @if (! $isAdmin)
+                <p class="mt-5 text-center text-sm text-gray-600">
+                    Don't have an account?
+                    <a href="{{ route('register', ['role' => $role]) }}"
+                        class="font-semibold text-green-700 hover:underline">Create an account</a>
+                </p>
+            @else
+                <p class="mt-5 text-center text-xs text-gray-500">
+                    Admin sign-in only.
+                </p>
+            @endif
         </div>
     </div>
     <script>

@@ -73,6 +73,41 @@
         </span>
     </button>
 
+    <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-indigo-900">Connect · Share coins</h3>
+        <p class="mt-1 text-xs text-indigo-900/80">Search by name, username/student ID, or email. CEIT balance transfers are CEIT-to-CEIT only.</p>
+        @if ($errors->has('connect'))
+            <p class="mt-2 text-xs font-semibold text-red-600">{{ $errors->first('connect') }}</p>
+        @endif
+        <form method="post" action="{{ route('student.connect.send') }}" class="mt-3 space-y-2">
+            @csrf
+            <input id="connect-search" type="text" placeholder="Search name / username / email / student id"
+                class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
+            <select id="connect-user" name="receiver_user_id" required
+                class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
+                <option value="">Select recipient</option>
+                @foreach(($connectRecipients ?? []) as $u)
+                    <option value="{{ $u->id }}">
+                        {{ $u->name }} ({{ $u->student_id ?: $u->email }})
+                    </option>
+                @endforeach
+            </select>
+            <select name="college" required class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
+                <option value="">Select canteen balance</option>
+                @foreach(($canSendCoinsFrom ?? []) as $row)
+                    <option value="{{ $row['slug'] }}">{{ $row['label'] }} (₱{{ number_format($row['balance'], 2) }})</option>
+                @endforeach
+            </select>
+            <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount"
+                class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm" required>
+            <input type="text" name="note" maxlength="300" placeholder="Note (optional)"
+                class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
+            <button type="submit" class="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+                Send coins
+            </button>
+        </form>
+    </div>
+
     <div class="grid grid-cols-2 gap-3">
         <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
             <p class="mb-2 text-xs text-gray-500">Total spent</p>
@@ -99,6 +134,9 @@
                     <div>
                         <p class="text-sm font-semibold text-gray-800">{{ $transaction['description'] }}</p>
                         <p class="mt-1 text-xs text-gray-500">{{ $transaction['date'] }}</p>
+                        @if (!empty($transaction['receipt_url']))
+                            <a href="{{ $transaction['receipt_url'] }}" class="mt-1 inline-block text-xs font-semibold text-indigo-700 underline">Open printable receipt</a>
+                        @endif
                     </div>
                     <p
                         class="text-lg font-bold {{ $transaction['type'] === 'debit' ? 'text-red-500' : 'text-green-600' }}">
@@ -208,6 +246,33 @@
                 @endif
                 document.getElementById('btn-wallet-scroll-transactions')?.addEventListener('click', function() {
                     document.getElementById('wallet-transactions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            })();
+        </script>
+        <script>
+            (function () {
+                const searchInput = document.getElementById('connect-search');
+                const select = document.getElementById('connect-user');
+                const endpoint = @json(route('student.connect.search'));
+                if (!searchInput || !select || !endpoint) return;
+                let timer = null;
+                searchInput.addEventListener('input', function () {
+                    clearTimeout(timer);
+                    const q = searchInput.value.trim();
+                    timer = setTimeout(async function () {
+                        if (q.length < 2) return;
+                        try {
+                            const res = await fetch(endpoint + '?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+                            const data = await res.json();
+                            select.innerHTML = '<option value="">Select recipient</option>';
+                            (data.items || []).forEach(function (u) {
+                                const opt = document.createElement('option');
+                                opt.value = String(u.id);
+                                opt.textContent = u.name + ' (' + u.email + ')';
+                                select.appendChild(opt);
+                            });
+                        } catch (e) {}
+                    }, 300);
                 });
             })();
         </script>

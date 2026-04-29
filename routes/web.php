@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
@@ -15,13 +16,25 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/continue-as/{role}', function (string $role) {
+    abort_unless(in_array($role, ['student', 'staff', 'admin'], true), 404);
+
+    if (Auth::check()) {
+        Auth::logout();
+        request()->session()->invalidate();
+        request()->session()->regenerateToken();
+    }
+
+    return redirect()->route('login', ['role' => $role]);
+})->name('continue-as');
+
 Route::get('/force-logout', function () {
     Auth::logout();
     session()->invalidate();
     session()->regenerateToken();
 
     return redirect('/');
-});
+})->name('force-logout');
 
 /*
 |--------------------------------------------------------------------------
@@ -35,12 +48,33 @@ Route::get('/dashboard', function () {
         return redirect('/');
     }
 
-    return Auth::user()->role === 'student'
+    $role = strtolower(trim((string) (Auth::user()->role ?? 'student')));
+    if ($role === 'admin') {
+        return redirect()->route('admin.dashboard');
+    }
+
+    return $role === 'student'
         ? redirect()->route('student.dashboard')
         : redirect()->route('staff.dashboard');
 })
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
+
+Route::get('/admin/dashboard', [AdminController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.dashboard');
+Route::get('/admin/coupons', [AdminController::class, 'coupons'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.coupons');
+Route::post('/admin/coupons', [AdminController::class, 'storeCoupon'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.coupons.store');
+Route::patch('/admin/coupons/{coupon}', [AdminController::class, 'updateCoupon'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.coupons.update');
+Route::post('/admin/users/{user}/inactive-label', [AdminController::class, 'toggleInactiveLabel'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.users.inactive.toggle');
 
 /*
 |--------------------------------------------------------------------------
@@ -64,6 +98,9 @@ Route::get('/student/dashboard', [StudentController::class, 'index'])
 Route::post('/student/orders/{orderId}/feedback', [StudentController::class, 'submitFeedback'])
     ->middleware(['auth', 'verified'])
     ->name('student.feedback.submit');
+Route::post('/student/orders/{order}/qr', [StudentController::class, 'generateOrderQr'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.order.qr');
 
 /*
 |--------------------------------------------------------------------------
@@ -86,6 +123,9 @@ Route::get('/student/orders/{order}/receipt', [StudentController::class, 'orderR
 Route::get('/student/wallet', [StudentController::class, 'wallet'])
     ->middleware(['auth', 'verified'])
     ->name('student.wallet');
+Route::get('/student/wallet/receipts/{receipt}', [StudentController::class, 'showWalletReceipt'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.receipts.show');
 
 Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'updateWalletBalance'])
     ->middleware(['auth', 'verified'])
@@ -94,6 +134,12 @@ Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'up
 Route::post('/student/wallet/deposit-inquiry', [StudentController::class, 'storeWalletDepositInquiry'])
     ->middleware(['auth', 'verified'])
     ->name('student.wallet.deposit-inquiry');
+Route::get('/student/connect/search', [StudentController::class, 'connectSearch'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.connect.search');
+Route::post('/student/connect/send', [StudentController::class, 'sendCoins'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.connect.send');
 
 Route::get('/student/notification', [StudentController::class, 'notifications'])
     ->middleware(['auth', 'verified'])
@@ -162,6 +208,9 @@ Route::middleware('auth')->group(function () {
     */
 
     Route::get('/staff/orders', [DashboardController::class, 'orders'])->name('staff.orders');
+    Route::get('/staff/qr-scanner', [DashboardController::class, 'qrScanner'])->name('staff.qr.scanner');
+    Route::get('/staff/qr/{token}', [DashboardController::class, 'qrConfirm'])->name('staff.qr.confirm');
+    Route::post('/staff/qr/{token}/consume', [DashboardController::class, 'qrConsume'])->name('staff.qr.consume');
     Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
     Route::patch('/staff/orders/{order}/status', [DashboardController::class, 'updateOrderStatus'])->name('staff.orders.status');
     Route::get('/staff/notification', [DashboardController::class, 'notification'])->name('staff.notification');

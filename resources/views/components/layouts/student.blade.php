@@ -26,9 +26,11 @@
             default => route('student.dashboard'),
         };
     @endphp
-    <div class="coinmeal-container pb-0 pt-2">
-        @include('partials.app-back-link', ['href' => $studentBackHref, 'variant' => 'student'])
-    </div>
+    @if (request()->route()?->getName() !== 'student.dashboard')
+        <div class="coinmeal-container pb-0 pt-2">
+            @include('partials.app-back-link', ['href' => $studentBackHref, 'variant' => 'student'])
+        </div>
+    @endif
 
     <div class="coinmeal-container space-y-4 py-4 sm:space-y-5 md:space-y-6">
         {{ $slot }}

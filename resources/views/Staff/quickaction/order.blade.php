@@ -23,6 +23,7 @@
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Order</p>
                 <p class="text-lg font-bold text-gray-900">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
                 <p class="mt-1 text-sm text-gray-600">{{ $order->created_at?->format('l, F j, Y \a\t g:i A') }}</p>
+        <p class="mt-1 text-xs text-gray-500">Mode: {{ strtoupper(str_replace('_', ' ', $order->order_mode ?? 'dine_in')) }}</p>
             </div>
             @php
                 $badge = match ($order->status) {

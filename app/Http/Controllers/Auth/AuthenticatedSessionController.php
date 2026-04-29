@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -18,7 +19,7 @@ class AuthenticatedSessionController extends Controller
 
         if ($role !== null) {
             $request->validate([
-                'role' => ['string', Rule::in(['student', 'staff'])],
+                'role' => ['string', Rule::in(['student', 'staff', 'admin'])],
             ]);
         }
 
@@ -33,9 +34,17 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
         $request->session()->put('selected_role', Auth::user()->role);
+        if (Schema::hasColumn('users', 'last_login_at')) {
+            Auth::user()->forceFill([
+                'last_login_at' => now(),
+            ])->save();
+        }
 
         $role = Auth::user()->role;
 
+        if ($role === 'admin') {
+            return redirect()->route('admin.dashboard');
+        }
         if ($role === 'staff') {
             return redirect()->route('dashboard');
         } else {

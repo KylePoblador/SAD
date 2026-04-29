@@ -17,6 +17,13 @@
             {{ session('status') }}
         </div>
     @endif
+    @if (session('status') === 'qr-generated' && session('qr_token'))
+        <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            <p class="font-semibold">QR generated for {{ session('qr_order') }}</p>
+            <p class="mt-1 text-xs">Let staff scan this token:</p>
+            <code class="mt-2 block rounded bg-white px-2 py-1 text-xs">{{ session('qr_token') }}</code>
+        </div>
+    @endif
 
     @if (session('error'))
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
@@ -84,6 +91,7 @@
                     <div>
                         <p class="text-sm font-semibold text-gray-800">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
                         <p class="text-xs text-gray-500">{{ $order->canteen }}</p>
+                        <p class="text-xs text-gray-500">Mode: {{ strtoupper(str_replace('_', ' ', $order->order_mode ?? 'dine_in')) }}</p>
                         <p class="text-xs text-gray-400">{{ $order->created_at->format('M d, Y H:i') }}</p>
                     </div>
                     @if ($order->status == 'ready')
@@ -133,12 +141,21 @@
                 @endif
 
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-lg font-bold text-green-600">₱{{ number_format($order->total, 2) }}</span>
+                    <span class="text-lg font-bold text-green-600">₱{{ number_format($order->payable_total ?? $order->total, 2) }}</span>
                     <div class="flex flex-wrap gap-2">
                         <a href="{{ route('student.orders.receipt', $order) }}"
                             class="inline-flex items-center rounded-full bg-gray-100 px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-200">
                             View receipt
                         </a>
+                        @if ($order->status !== 'completed')
+                            <form method="post" action="{{ route('student.order.qr', $order) }}">
+                                @csrf
+                                <button type="submit"
+                                    class="inline-flex items-center rounded-full bg-indigo-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-indigo-700">
+                                    Generate pay QR
+                                </button>
+                            </form>
+                        @endif
                         @if ($order->status == 'ready')
                             <span
                                 class="rounded-full bg-green-600 px-3 py-2 text-xs font-medium text-white">Pick up at counter</span>
