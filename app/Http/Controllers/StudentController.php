@@ -242,10 +242,12 @@ class StudentController extends Controller
 
     public function submitFeedback(Request $request, string $orderId)
     {
-        $order = Order::query()
-            ->where('user_id', auth()->id())
+        $order = Order::where('user_id', auth()->id())
             ->where(function ($q) use ($orderId) {
-                $q->where('id', $orderId)->orWhere('order_number', $orderId);
+                $q->where('order_number', $orderId);
+                if (ctype_digit((string) $orderId)) {
+                    $q->orWhere('id', (int) $orderId);
+                }
             })
             ->first();
 
@@ -302,7 +304,6 @@ class StudentController extends Controller
             'studentName' => auth()->user()->name,
         ]);
     }
-
     public function orders()
     {
         $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
