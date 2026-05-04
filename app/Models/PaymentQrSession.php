@@ -5,20 +5,25 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class WalletDepositInquiry extends Model
+class PaymentQrSession extends Model
 {
     protected $fillable = [
         'user_id',
         'college',
-        'intended_amount',
-        'note',
+        'amount',
+        'token',
+        'expires_at',
+        'scanned_at',
+        'scanned_by_user_id',
         'status',
     ];
 
     protected function casts(): array
     {
         return [
-            'intended_amount' => 'decimal:2',
+            'amount' => 'decimal:2',
+            'expires_at' => 'datetime',
+            'scanned_at' => 'datetime',
         ];
     }
 
@@ -27,8 +32,8 @@ class WalletDepositInquiry extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function isPending(): bool
+    public function scannedBy(): BelongsTo
     {
-        return $this->status === 'pending';
+        return $this->belongsTo(User::class, 'scanned_by_user_id');
     }
 }

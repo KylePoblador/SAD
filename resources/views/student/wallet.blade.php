@@ -1,35 +1,30 @@
 <x-layouts.student title="My wallet" active="wallet">
-    @if (session('status') === 'deposit-inquiry-sent')
-        <div class="mb-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900 shadow-sm">
-            <p class="font-semibold">Your canteen has been notified.</p>
-            <p class="mt-1 text-green-800/90">Go to <strong>{{ session('deposit_target') }}</strong>, pay cash at the counter —
-                staff will load your wallet when you arrive.</p>
-            @if (session('deposit_college_slug'))
-                <a href="{{ route('student.canteen', session('deposit_college_slug')) }}"
-                    class="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 sm:w-auto sm:px-5">
-                    Open this canteen
+    @if (session('status'))
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            {{ session('status') }}
+            @if (session('transfer_receipt_id'))
+                <a href="{{ route('student.wallet.transfer.receipt', ['walletTransfer' => session('transfer_receipt_id')]) }}"
+                    class="ml-2 font-semibold underline underline-offset-2">
+                    View digital receipt
                 </a>
             @endif
         </div>
     @endif
 
-    @if ($errors->any() && old('_form') === 'wallet-deposit-inquiry')
-        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <ul class="list-inside list-disc space-y-0.5">
-                @foreach ($errors->all() as $err)
-                    <li>{{ $err }}</li>
-                @endforeach
-            </ul>
+    @if ($errors->has('connection') || $errors->has('transfer') || $errors->any())
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {{ $errors->first('connection') ?: ($errors->first('transfer') ?: $errors->first()) }}
         </div>
     @endif
 
-    <div class="relative overflow-hidden rounded-2xl bg-green-600 p-6 text-white shadow-sm">
-        <p class="mb-2 text-sm font-medium opacity-90">Total balance (all canteens)</p>
-        <p class="mb-4 text-5xl font-bold">₱{{ number_format($wallet['balance'], 2) }}</p>
+    <div class="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
+        style="background:linear-gradient(135deg,#16a34a 0%,#16a34a 50%,#169a45 100%);">
+        <p class="mb-2 text-sm font-semibold" style="color:#dcfce7;">Total balance (all canteens)</p>
+        <p class="mb-4 text-5xl font-bold tracking-tight" style="color:#ffffff;">₱{{ number_format($wallet['balance'], 2) }}</p>
         @if (!empty($wallet['college']))
-            <div class="rounded-xl bg-white/20 px-4 py-3 backdrop-blur-sm">
-                <p class="mb-1 text-xs opacity-90">College on profile</p>
-                <p class="text-sm font-semibold">{{ $wallet['college'] }}</p>
+            <div class="rounded-xl px-4 py-3" style="background-color:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.26);">
+                <p class="mb-1 text-xs font-medium" style="color:#d1fae5;">College on profile</p>
+                <p class="text-sm font-bold" style="color:#ffffff;">{{ $wallet['college'] }}</p>
             </div>
         @endif
     </div>
@@ -49,29 +44,149 @@
         @endforelse
     </div>
 
-    <div class="mt-4 space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/95 px-4 py-3 text-xs leading-relaxed text-emerald-950 shadow-sm">
-        <p class="font-bold text-emerald-900">Top-up request</p>
-        <p>A <strong>Notify canteen</strong> message does not move money yet. Your balance for that canteen goes up only
-            after staff <strong>confirm load</strong> when you pay cash at their counter.</p>
+    <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/95 px-4 py-3 text-xs leading-relaxed text-emerald-950 shadow-sm">
+        <p class="font-bold text-emerald-900">Load wallet via QR</p>
+        <p>Generate a load QR, show it to the canteen staff, and they will scan then confirm your cash top-up.</p>
+    </div>
+    <div class="rounded-2xl border border-amber-200 bg-white p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-800">Generate wallet-load QR</h3>
+        <form method="post" action="{{ route('student.wallet.load-qr') }}" class="mt-3 grid gap-2 sm:grid-cols-4">
+            @csrf
+            <select name="college" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" required>
+                <option value="">Select canteen</option>
+                @foreach (($topUpCanteens ?? []) as $c)
+                    <option value="{{ $c['slug'] }}">{{ $c['label'] }}</option>
+                @endforeach
+            </select>
+            <input type="number" step="0.01" min="1" name="amount" required placeholder="Cash amount"
+                class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <input type="text" name="note" maxlength="500" placeholder="Optional note"
+                class="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <button type="submit"
+                class="rounded-lg px-3 py-2 text-sm font-bold shadow-sm"
+                style="background-color:#92400e;color:#ffffff;border:1px solid #78350f;">Generate QR</button>
+        </form>
     </div>
 
-    {{-- Load wallet — same action as top-up inquiry modal (prominent card, mockup-style) --}}
-    <button type="button" id="btn-wallet-topup-info"
-        class="group w-full rounded-2xl border-2 border-amber-200/90 bg-white p-1 shadow-sm ring-1 ring-amber-100/80 transition hover:border-amber-300 hover:shadow-md active:scale-[0.99]">
-        <span class="flex flex-col items-center rounded-xl px-4 py-6">
-            <span
-                class="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-orange-300/50 transition group-hover:shadow-lg group-hover:shadow-orange-300/60">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-emerald-900">Connections</h3>
+        <div class="mt-3 flex flex-wrap gap-2">
+            <input type="text" id="connection-search-input" name="friend_student_id" placeholder="Search by name or student ID"
+                class="flex-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm" required>
+            <button type="button" id="connection-search-btn" aria-label="Search students"
+                class="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-bold shadow-sm"
+                style="background-color:#047857;color:#ffffff;border:1px solid #065f46;">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" />
                 </svg>
-            </span>
-            <span class="text-lg font-bold tracking-tight text-amber-900">Load wallet</span>
-            <span class="mt-1.5 max-w-[260px] text-center text-xs font-medium leading-snug text-amber-800/75">Pick a canteen,
-                notify staff, then pay at the counter.</span>
-        </span>
-    </button>
+            </button>
+        </div>
+
+        <div id="connection-search-results" class="mt-3 space-y-2"></div>
+
+        <div class="mt-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800">Incoming requests</p>
+            @forelse (($incomingConnectionRequests ?? collect()) as $requestItem)
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <div>
+                        <p class="text-sm font-semibold text-gray-900">{{ $requestItem->requester?->name ?? 'Student' }}</p>
+                        <p class="text-xs text-gray-600">{{ $requestItem->requester?->student_id ?? 'No ID' }} · {{ $requestItem->requester?->email ?? '' }}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <form method="post" action="{{ route('student.wallet.connection-request.respond', $requestItem) }}">
+                            @csrf
+                            <input type="hidden" name="action" value="accept">
+                            <button type="submit" class="rounded-lg px-3 py-1.5 text-xs font-bold"
+                                style="background-color:#065f46;color:#ffffff;border:1px solid #064e3b;">Accept</button>
+                        </form>
+                        <form method="post" action="{{ route('student.wallet.connection-request.respond', $requestItem) }}">
+                            @csrf
+                            <input type="hidden" name="action" value="reject">
+                            <button type="submit" class="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-700">Reject</button>
+                        </form>
+                    </div>
+                </div>
+            @empty
+                <p class="mt-2 text-xs text-gray-500">No incoming requests.</p>
+            @endforelse
+        </div>
+
+        <div class="mt-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800">Connected students</p>
+            @forelse (($connectionDetails ?? []) as $conn)
+                <details class="mt-2 rounded-xl border border-emerald-200 bg-white">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-900">{{ $conn['name'] }}</p>
+                            <p class="text-xs text-gray-600">{{ $conn['student_id'] ?: 'No student ID' }} · {{ $conn['email'] }}</p>
+                        </div>
+                        <span class="text-xs font-semibold text-emerald-700">View details</span>
+                    </summary>
+                    <div class="border-t border-emerald-100 px-3 py-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800">Wallet transfer history</p>
+                            <form method="post" action="{{ route('student.wallet.connection.remove', $conn['id']) }}">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
+                                    Remove connection
+                                </button>
+                            </form>
+                        </div>
+                        @if (empty($conn['history']))
+                            <p class="mt-2 text-xs text-gray-500">No transfer history yet.</p>
+                        @else
+                            <div class="mt-2 space-y-1">
+                                @foreach ($conn['history'] as $hist)
+                                    <div class="flex items-center justify-between rounded-md bg-gray-50 px-2 py-1 text-xs">
+                                        <span class="{{ $hist['type'] === 'sent' ? 'text-rose-600' : 'text-emerald-700' }}">
+                                            {{ $hist['type'] === 'sent' ? 'Sent' : 'Received' }}
+                                        </span>
+                                        <span class="font-semibold text-gray-800">₱{{ number_format((float) $hist['amount'], 2) }}</span>
+                                        <span class="text-gray-500">{{ $hist['date'] }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                </details>
+            @empty
+                <p class="mt-2 text-xs text-gray-500">No active connections yet.</p>
+            @endforelse
+        </div>
+    </div>
+
+    <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-green-50 to-emerald-100 p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-emerald-900">Transfer wallet balance</h3>
+        <form action="{{ route('student.wallet.transfer') }}" method="post" class="mt-3 grid gap-2 sm:grid-cols-4">
+            @csrf
+            <select name="receiver_user_id" class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm" required>
+                <option value="">Select friend</option>
+                @foreach (($connections ?? []) as $conn)
+                    <option value="{{ $conn->id }}">{{ $conn->name }}</option>
+                @endforeach
+            </select>
+            @if (!empty($senderTransferCollege))
+                <input type="hidden" name="college" value="{{ $senderTransferCollege['slug'] }}">
+                <div class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900">
+                    Transfer canteen: <span class="font-bold">{{ $senderTransferCollege['label'] }}</span>
+                </div>
+            @else
+                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Set your college on profile first to enable wallet transfer.
+                </div>
+            @endif
+            <input type="number" step="1" min="1" name="amount" required placeholder="Amount (whole number)"
+                class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm">
+            <input type="text" name="note" maxlength="255" placeholder="Optional note"
+                class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm sm:col-span-3">
+            <button type="submit"
+                class="rounded-lg px-3 py-2 text-sm font-bold shadow-sm"
+                style="background-color:#065f46;color:#ffffff;border:1px solid #064e3b;"
+                {{ empty($senderTransferCollege) ? 'disabled' : '' }}>Send</button>
+        </form>
+    </div>
 
     <div class="grid grid-cols-2 gap-3">
         <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -86,7 +201,8 @@
 
     <div>
         <button type="button" id="btn-wallet-scroll-transactions"
-            class="w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">
+            class="w-full rounded-xl py-3 text-sm font-bold shadow-sm transition"
+            style="background-color:#065f46;color:#ffffff;border:1px solid #064e3b;">
             View transactions
         </button>
     </div>
@@ -105,6 +221,14 @@
                         {{ $transaction['type'] === 'debit' ? '-' : '+' }}₱{{ number_format($transaction['amount'], 2) }}
                     </p>
                 </div>
+                @if (!empty($transaction['receipt_url']))
+                    <div class="mt-3">
+                        <a href="{{ $transaction['receipt_url'] }}"
+                            class="text-xs font-semibold text-indigo-600 hover:text-indigo-700">
+                            {{ $transaction['receipt_label'] ?? 'View digital receipt' }}
+                        </a>
+                    </div>
+                @endif
             </div>
         @empty
             <div class="rounded-xl border border-gray-100 bg-white p-8 text-center shadow-sm">
@@ -119,93 +243,9 @@
         @endforelse
     </div>
 
-    <div id="wallet-topup-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-topup-title"
-        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4 opacity-0 pointer-events-none transition-opacity duration-200">
-        <div id="wallet-topup-backdrop" class="absolute inset-0 bg-black/45 backdrop-blur-[1px]"></div>
-        <div id="wallet-topup-panel"
-            class="relative z-10 w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl transition-transform duration-300 ease-out sm:rounded-2xl translate-y-full sm:translate-y-0 sm:scale-95 sm:opacity-0">
-            <h2 id="wallet-topup-title" class="text-lg font-bold text-gray-900">Load wallet</h2>
-            <p class="mt-2 text-sm leading-relaxed text-gray-600">
-                Choose where you will deposit. Staff will see your request on their dashboard. When you arrive, pay cash
-                and they will use <strong>Load wallet</strong> to credit you.
-            </p>
-            @if (count($topUpCanteens ?? []) > 0)
-                <form method="post" action="{{ route('student.wallet.deposit-inquiry') }}" class="mt-4 space-y-3">
-                    @csrf
-                    <input type="hidden" name="_form" value="wallet-deposit-inquiry">
-                    <div>
-                        <label for="deposit-college" class="mb-1 block text-xs font-semibold text-gray-700">Canteen</label>
-                        <select id="deposit-college" name="college" required
-                            class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500">
-                            <option value="" disabled {{ old('_form') === 'wallet-deposit-inquiry' && old('college') ? '' : 'selected' }}>
-                                Select a canteen</option>
-                            @foreach ($topUpCanteens as $c)
-                                <option value="{{ $c['slug'] }}"
-                                    {{ old('_form') === 'wallet-deposit-inquiry' && old('college') === $c['slug'] ? 'selected' : '' }}>
-                                    {{ $c['label'] }}@if (!empty($c['dist'])) — {{ $c['dist'] }}@endif
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label for="deposit-amount" class="mb-1 block text-xs font-semibold text-gray-700">Amount
-                            (optional)</label>
-                        <input type="number" step="0.01" min="1" name="intended_amount" id="deposit-amount"
-                            value="{{ old('_form') === 'wallet-deposit-inquiry' ? old('intended_amount') : '' }}"
-                            placeholder="e.g. 200"
-                            class="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500">
-                    </div>
-                    <div>
-                        <label for="deposit-note" class="mb-1 block text-xs font-semibold text-gray-700">Note
-                            (optional)</label>
-                        <input type="text" name="note" id="deposit-note" maxlength="500"
-                            value="{{ old('_form') === 'wallet-deposit-inquiry' ? old('note') : '' }}"
-                            placeholder="e.g. arriving around noon"
-                            class="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500">
-                    </div>
-                    <button type="submit"
-                        class="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-green-700">
-                        Notify canteen
-                    </button>
-                </form>
-            @else
-                <p class="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    No canteen with a staff account is available right now. Try again later or contact an administrator.
-                </p>
-            @endif
-            <button type="button" id="btn-wallet-topup-close"
-                class="mt-4 w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                Close
-            </button>
-        </div>
-    </div>
-
     @push('scripts')
         <script>
             (function() {
-                var modal = document.getElementById('wallet-topup-modal');
-                var panel = document.getElementById('wallet-topup-panel');
-                var backdrop = document.getElementById('wallet-topup-backdrop');
-                function openTopupModal() {
-                    if (!modal || !panel) return;
-                    modal.classList.remove('opacity-0', 'pointer-events-none');
-                    modal.classList.add('opacity-100', 'pointer-events-auto');
-                    panel.classList.remove('translate-y-full', 'sm:scale-95', 'sm:opacity-0');
-                    panel.classList.add('translate-y-0', 'sm:scale-100', 'sm:opacity-100');
-                }
-                function closeTopupModal() {
-                    if (!modal || !panel) return;
-                    modal.classList.add('opacity-0', 'pointer-events-none');
-                    modal.classList.remove('opacity-100', 'pointer-events-auto');
-                    panel.classList.add('translate-y-full', 'sm:scale-95', 'sm:opacity-0');
-                    panel.classList.remove('translate-y-0', 'sm:scale-100', 'sm:opacity-100');
-                }
-                document.getElementById('btn-wallet-topup-info')?.addEventListener('click', openTopupModal);
-                document.getElementById('btn-wallet-topup-close')?.addEventListener('click', closeTopupModal);
-                backdrop?.addEventListener('click', closeTopupModal);
-                @if ($errors->any() && old('_form') === 'wallet-deposit-inquiry')
-                    openTopupModal();
-                @endif
                 document.getElementById('btn-wallet-scroll-transactions')?.addEventListener('click', function() {
                     document.getElementById('wallet-transactions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 });
@@ -214,6 +254,87 @@
         <script>
             const unreadBadge = document.getElementById('unread-badge');
             const unreadCountEndpoint = @json(route('student.unread-count'));
+            const searchInput = document.getElementById('connection-search-input');
+            const searchBtn = document.getElementById('connection-search-btn');
+            const searchResults = document.getElementById('connection-search-results');
+            const searchEndpoint = @json(route('student.wallet.connection-search'));
+            const connectionRequestEndpoint = @json(route('student.wallet.connection-request'));
+            const walletPageUrl = @json(route('student.wallet'));
+            const csrfToken = @json(csrf_token());
+
+            function escapeHtml(text) {
+                return String(text ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            }
+
+            function renderSearchResults(students, query) {
+                if (!searchResults) return;
+
+                if (!students.length) {
+                    searchResults.innerHTML = `<p class="text-sm text-gray-600">No students found for "<strong>${escapeHtml(query)}</strong>".</p>`;
+                    return;
+                }
+
+                const html = students.map((student) => {
+                    const avatar = student.avatar_url
+                        ? `<img src="${escapeHtml(student.avatar_url)}" alt="${escapeHtml(student.name)}" class="h-10 w-10 rounded-full object-cover ring-1 ring-emerald-200">`
+                        : `<div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800 ring-1 ring-emerald-200">${escapeHtml((student.name || '?').charAt(0).toUpperCase())}</div>`;
+                    const actionButton = student.relation_status === 'connected'
+                        ? `<span class="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800">Connected</span>`
+                        : (student.relation_status === 'pending_sent'
+                            ? `<span class="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800">Request sent</span>`
+                            : (student.relation_status === 'pending_received'
+                                ? `<a href="${escapeHtml(walletPageUrl)}" class="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800">Pending in incoming list</a>`
+                                : `<form method="post" action="${escapeHtml(connectionRequestEndpoint)}">
+                            <input type="hidden" name="_token" value="${escapeHtml(csrfToken)}">
+                            <input type="hidden" name="friend_user_id" value="${student.id}">
+                            <button type="submit" class="rounded-lg px-3 py-2 text-xs font-bold shadow-sm" style="background-color:#065f46;color:#ffffff;border:1px solid #064e3b;">Send request</button>
+                        </form>`));
+
+                    return `<div class="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                        <div class="flex items-center gap-3">
+                            ${avatar}
+                            <div>
+                                <p class="text-sm font-semibold text-gray-900">${escapeHtml(student.name)}</p>
+                                <p class="text-xs text-gray-600">${escapeHtml(student.student_id || 'No student ID')}</p>
+                                <p class="text-xs text-gray-500">${escapeHtml(student.email)}</p>
+                                <p class="text-xs text-emerald-800">${escapeHtml(student.college || 'No college')}</p>
+                            </div>
+                        </div>
+                        <div>${actionButton}</div>
+                    </div>`;
+                }).join('');
+
+                searchResults.innerHTML = html;
+            }
+
+            async function searchStudents() {
+                const query = (searchInput?.value || '').trim();
+                if (!query) {
+                    if (searchResults) searchResults.innerHTML = '<p class="text-sm text-gray-600">Type a student name to search.</p>';
+                    return;
+                }
+                if (searchResults) searchResults.innerHTML = '<p class="text-sm text-gray-600">Searching students...</p>';
+                try {
+                    const response = await fetch(`${searchEndpoint}?q=${encodeURIComponent(query)}`, {
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                    });
+                    if (!response.ok) throw new Error('Search failed');
+                    const data = await response.json();
+                    renderSearchResults(Array.isArray(data.students) ? data.students : [], query);
+                } catch (e) {
+                    if (searchResults) {
+                        searchResults.innerHTML = '<p class="text-sm text-red-600">Unable to search right now. Please try again.</p>';
+                    }
+                }
+            }
+
             async function updateUnreadCount() {
                 if (!unreadBadge) return;
                 try {
@@ -234,6 +355,14 @@
             }
             updateUnreadCount();
             setInterval(updateUnreadCount, 30000);
+            searchResults.innerHTML = '<p class="text-sm text-gray-600">Type a student name to search.</p>';
+            searchBtn?.addEventListener('click', searchStudents);
+            searchInput?.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    searchStudents();
+                }
+            });
         </script>
     @endpush
 </x-layouts.student>

@@ -12,11 +12,40 @@
                 </a>
                 <h1 class="text-lg font-bold text-gray-900 sm:text-xl">{{ $canteenName }}</h1>
                 <p class="text-xs text-gray-500">Cart · {{ strtoupper($college) }}</p>
+                <p class="mt-1 text-xs font-semibold {{ ($selectedServiceMode ?? 'dine_in') === 'dine_in' ? 'text-emerald-700' : 'text-blue-700' }}">
+                    Mode: {{ ($selectedServiceMode ?? 'dine_in') === 'dine_in' ? 'Dine-in' : 'Take out' }}
+                </p>
             </div>
             <a href="{{ route('student.cart.hub') }}"
                 class="shrink-0 text-xs font-semibold text-gray-500 underline decoration-gray-300 hover:text-gray-800">
                 All carts
             </a>
+        </div>
+
+        <div class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm font-bold text-gray-900">Change dining mode</p>
+                    <p class="mt-1 text-xs text-gray-500">Switch anytime before checkout.</p>
+                </div>
+                <form method="post" action="{{ route('student.canteen.mode', ['college' => $college]) }}" class="flex flex-wrap gap-2">
+                    @csrf
+                    <input type="hidden" name="redirect_to" value="cart">
+                    <button type="submit" name="service_mode" value="dine_in"
+                        class="rounded-xl px-4 py-2 text-sm font-semibold transition {{ ($selectedServiceMode ?? 'dine_in') === 'dine_in' ? 'bg-emerald-600 text-white shadow-sm' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50' }}">
+                        Dine in
+                    </button>
+                    <button type="submit" name="service_mode" value="takeout"
+                        class="rounded-xl px-4 py-2 text-sm font-semibold transition {{ ($selectedServiceMode ?? 'dine_in') === 'takeout' ? 'bg-blue-600 text-white shadow-sm' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50' }}">
+                        Take out
+                    </button>
+                </form>
+            </div>
+            <p class="mt-3 text-xs {{ ($selectedServiceMode ?? 'dine_in') === 'dine_in' ? 'text-amber-700' : 'text-blue-700' }}">
+                {{ ($selectedServiceMode ?? 'dine_in') === 'dine_in'
+                    ? 'Seat reservation is required for dine in checkout.'
+                    : 'Take out orders can proceed without a seat reservation.' }}
+            </p>
         </div>
 
         @if ($errors->has('checkout'))
@@ -35,7 +64,7 @@
             </a>
         </div>
 
-        @if (! $hasReservedSeat)
+        @if (($selectedServiceMode ?? 'dine_in') === 'dine_in' && ! $hasReservedSeat)
             <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                 <p class="font-semibold">Reserve a seat to check out</p>
                 <p class="mt-1 text-xs text-amber-900/90">You can still edit your cart; checkout runs after you have a
@@ -44,6 +73,47 @@
                     class="mt-3 inline-flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 sm:w-auto">
                     Reserve seat
                 </a>
+            </div>
+        @endif
+        @if ($hasReservedSeat)
+            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                <p class="font-semibold">Seat reservation active</p>
+                <p class="mt-1 text-xs text-emerald-900/90">Need to switch seats or release your seat? You can do it before checkout.</p>
+                @if (! empty($activeReservationCode))
+                    <p class="mt-1 text-xs font-semibold text-emerald-900/90">Reservation code: {{ $activeReservationCode }}</p>
+                @endif
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <a href="{{ route('student.reserve', $college) }}"
+                        class="inline-flex min-h-[42px] items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700">
+                        Change seat
+                    </a>
+                    <form action="{{ route('student.cancel.seat', ['college' => $college]) }}" method="POST">
+                        @csrf
+                        <button type="submit"
+                            class="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">
+                            Cancel reservation
+                        </button>
+                    </form>
+                </div>
+            </div>
+        @endif
+        @if (($selectedServiceMode ?? 'dine_in') === 'dine_in')
+            <div class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+                <p class="font-semibold">Join existing reservation</p>
+                <p class="mt-1 text-xs text-blue-900/90">If your friend already reserved a seat, enter their code here.</p>
+                <form method="POST" action="{{ route('student.canteen.join-reservation', ['college' => $college]) }}" class="mt-3 flex flex-col gap-2 sm:flex-row">
+                    @csrf
+                    <input type="text" name="reservation_code" maxlength="20" required
+                        class="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm uppercase text-blue-900 placeholder:text-blue-400"
+                        placeholder="Reservation code" value="{{ old('reservation_code') }}">
+                    <button type="submit"
+                        class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+                        Join
+                    </button>
+                </form>
+                @error('reservation_code')
+                    <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                @enderror
             </div>
         @endif
 
@@ -105,9 +175,17 @@
 
                 <form action="{{ route('student.cart.checkout', $college) }}" method="post" class="mt-4">
                     @csrf
+                    <div class="mb-3">
+                        <label class="mb-1 block text-xs font-semibold text-gray-600">Order mode</label>
+                        <select name="service_mode" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                            <option value="dine_in" @selected(old('service_mode', $selectedServiceMode ?? 'dine_in') === 'dine_in')>Dine in</option>
+                            <option value="takeout" @selected(old('service_mode', $selectedServiceMode ?? 'dine_in') === 'takeout')>Take out</option>
+                        </select>
+                        <p class="mt-1 text-[11px] text-gray-500">Seat is only required for dine in.</p>
+                    </div>
                     <button type="submit"
                         class="min-h-[48px] w-full touch-manipulation rounded-xl bg-green-600 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        @disabled(! $hasReservedSeat || ($walletBalance + 0.001 < $subtotal))>
+                        @disabled($walletBalance + 0.001 < $subtotal)>
                         Place order
                     </button>
                 </form>

@@ -1,8 +1,12 @@
 <x-layouts.staff-subpage title="Staff notifications" subtitle="Orders and other activity">
+    <div id="staff-notif-feedback" class="mb-3 hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+        All notifications marked as read.
+    </div>
+
     <div class="mb-4 flex flex-wrap gap-2">
         <button type="button" id="staff-notif-mark-all"
             class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">
-            Mark all as done
+            Mark all as read
         </button>
         <button type="button" id="staff-notif-clear-all"
             class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100">
@@ -30,11 +34,11 @@
         const clearAllUrl = @json(route('staff.notification.clear-all'));
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const notificationFallbackUrl = @json(route('staff.notification', [], false));
+        const feedbackEl = document.getElementById('staff-notif-feedback');
+        let feedbackTimer = null;
 
-        function shellClass(status, isRead) {
+        function shellClass(status) {
             if (status === 'empty') return 'border border-gray-200 bg-white';
-            const unread = !isRead && status !== 'empty';
-            if (unread) return 'border-l-4 border-rose-500 bg-rose-50/70 border-y border-r border-gray-200';
             if (status === 'completed') return 'border border-green-300 bg-green-50/90';
             if (status === 'ready') return 'border border-green-200 bg-green-100/60';
             if (status === 'preparing') return 'border border-orange-200 bg-orange-50/90';
@@ -99,26 +103,47 @@
             const actionUrl = String(n.action_url || n.actionUrl || '').trim();
             const href = actionUrl || notificationFallbackUrl;
             const cur = !isEmpty ? 'cursor-pointer' : '';
-            const shell = shellClass(n.status, isRead);
+            const shell = isEmpty
+                ? shellClass('empty')
+                : (isRead
+                    ? 'border border-gray-200 bg-white'
+                    : 'border-l-4 border-rose-500 bg-rose-50/70 border-y border-r border-gray-200');
+            const forcedReadStyle = isRead
+                ? 'style="background:#ffffff !important;border-color:#e5e7eb !important;"'
+                : '';
+            const readBadge = isEmpty ? '' : (isRead ?
+                '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Read</span>' :
+                '<span class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800">Unread</span>');
             const inner = `
                     <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-lg ${ic}">${icon}</div>
                     <div class="min-w-0 flex-1">
-                        <strong class="block text-sm text-gray-900">${n.title}</strong>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <strong class="block text-sm text-gray-900">${n.title}</strong>
+                            ${readBadge}
+                        </div>
                         <div class="text-xs text-gray-500">${n.time}</div>
                         <div class="mt-1 text-sm text-gray-600">${n.message}</div>
                     </div>`;
 
             if (isEmpty) {
                 return `
-                <div role="status" class="flex items-start gap-3 rounded-xl p-3 shadow-sm ${shell}" data-nid="${escAttr(nid)}" data-status="empty">
+                <div role="status" class="flex items-start gap-3 rounded-xl p-3 shadow-sm ${shell}" ${forcedReadStyle} data-nid="${escAttr(nid)}" data-status="empty">
                     ${inner}
                 </div>`;
             }
 
             return `
-                <a href="${escAttr(href)}" class="notification-feed-item flex items-start gap-3 rounded-xl p-3 shadow-sm transition hover:shadow-md ${shell} ${cur} text-inherit no-underline" data-nid="${escAttr(nid)}" data-status="${escAttr(n.status)}">
+                <a href="${escAttr(href)}" class="notification-feed-item flex items-start gap-3 rounded-xl p-3 shadow-sm transition hover:shadow-md ${shell} ${cur} text-inherit no-underline" ${forcedReadStyle} data-nid="${escAttr(nid)}" data-status="${escAttr(n.status)}">
                     ${inner}
                 </a>`;
+        }
+
+        function emitUnreadCount(countLike) {
+            window.dispatchEvent(new CustomEvent('staff-unread-count:update', {
+                detail: {
+                    count: Number(countLike || 0)
+                }
+            }));
         }
 
         if (!list.dataset.clickBound) {
@@ -160,14 +185,32 @@
             return data;
         }
 
+        function showFeedback(message, tone) {
+            if (!feedbackEl) return;
+            feedbackEl.textContent = message;
+            feedbackEl.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-rose-200', 'bg-rose-50', 'text-rose-800');
+            if (tone === 'error') {
+                feedbackEl.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-800');
+            } else {
+                feedbackEl.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+            }
+            if (feedbackTimer) clearTimeout(feedbackTimer);
+            feedbackTimer = setTimeout(function() {
+                feedbackEl.classList.add('hidden');
+            }, 2500);
+        }
+
         document.getElementById('staff-notif-mark-all')?.addEventListener('click', async function() {
             try {
                 const data = await postStaffNotificationAction(markAllReadUrl);
                 if (data.notifications) {
                     list.innerHTML = data.notifications.map(renderNotification).join('');
                 }
+                emitUnreadCount(data.unread_count ?? 0);
+                showFeedback('All notifications are now marked as read.', 'success');
             } catch (e) {
                 console.error(e);
+                showFeedback('Unable to mark notifications as read right now.', 'error');
             }
         });
 
@@ -180,6 +223,7 @@
                 if (data.notifications) {
                     list.innerHTML = data.notifications.map(renderNotification).join('');
                 }
+                emitUnreadCount(data.unread_count ?? 0);
             } catch (e) {
                 console.error(e);
             }
@@ -195,6 +239,7 @@
                 });
                 const data = await response.json();
                 list.innerHTML = data.notifications.map(renderNotification).join('');
+                emitUnreadCount(data.unread_count ?? 0);
             } catch (error) {
                 list.innerHTML = `
                 <div class="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3 shadow-sm">
@@ -208,7 +253,7 @@
         }
 
         loadNotifications();
-        setInterval(loadNotifications, 5000);
+        setInterval(loadNotifications, 2500);
     </script>
 
     <div class="h-14" aria-hidden="true"></div>

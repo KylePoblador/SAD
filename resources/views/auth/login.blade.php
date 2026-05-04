@@ -15,32 +15,54 @@
     @endif
 </head>
 
-<body class="min-h-screen bg-gradient-to-br from-[#d8e6d8] via-[#cfe3d3] to-[#e7f1e7] px-4 py-8 font-sans relative overflow-hidden">
+<body class="min-h-screen bg-gradient-to-br from-[#d8e6d8] via-[#cfe3d3] to-[#e7f1e7] px-4 py-8 font-sans relative overflow-x-hidden">
     @php
         $role = old('role', $selectedRole ?? request('role', 'student'));
         $isStaff = $role === 'staff';
-        $headerColor = $isStaff ? 'from-orange-600 to-orange-500' : 'from-green-600 to-green-500';
-        $buttonColor = $isStaff ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600';
+        $isAdmin = $role === 'admin';
+        $headerColor = $isAdmin
+            ? 'from-blue-700 to-indigo-700'
+            : ($isStaff ? 'from-orange-600 to-orange-500' : 'from-green-600 to-green-500');
+        $buttonColor = $isAdmin
+            ? 'bg-blue-500 hover:bg-blue-600'
+            : ($isStaff ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600');
+        $roleLabel = $isAdmin ? 'Administrator' : ($isStaff ? 'Canteen Staff' : 'Student');
     @endphp
 
     <div class="pointer-events-none absolute -top-16 -left-16 h-56 w-56 rounded-full bg-green-300/30 blur-3xl"></div>
     <div class="pointer-events-none absolute -bottom-20 -right-16 h-64 w-64 rounded-full bg-emerald-200/40 blur-3xl"></div>
 
-    <div class="relative mx-auto w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white/95 shadow-[0_20px_45px_rgba(28,77,43,0.18)] backdrop-blur">
-        <div class="bg-gradient-to-b {{ $headerColor }} px-5 py-5 text-white">
+    <div class="relative mx-auto mb-[max(1rem,env(safe-area-inset-bottom))] w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white/95 shadow-[0_20px_45px_rgba(28,77,43,0.18)] backdrop-blur">
+        <div class="relative bg-gradient-to-b {{ $headerColor }} px-5 py-5 text-white">
+            <div class="pointer-events-none absolute inset-0 bg-black/10"></div>
             <div class="mb-4">
                 <a href="{{ url('/') }}"
-                    class="inline-flex items-center text-sm font-medium text-white/90 hover:text-white">←</a>
+                    class="relative inline-flex items-center text-sm font-medium text-white/95 hover:text-white">←</a>
             </div>
-            <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
+            <div class="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/35">
                 <span class="text-xl">🍽️</span>
             </div>
-            <h1 class="text-center text-3xl font-bold">Welcome to CoinMeal</h1>
-            <p class="mt-1 text-center text-sm text-white/90">Sign in as {{ $isStaff ? 'Canteen Staff' : 'Student' }}
+            <h1 class="relative text-center text-3xl font-bold tracking-tight text-white">Welcome to CoinMeal</h1>
+            <p class="relative mt-1 text-center text-sm font-medium text-white/95">Sign in as {{ $roleLabel }}
             </p>
         </div>
 
         <div class="px-5 py-6">
+            <div class="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-gray-100 p-1">
+                <a href="{{ route('login', ['role' => 'student']) }}"
+                    class="{{ $role === 'student' ? 'bg-green-500 text-white' : 'bg-white text-gray-600' }} rounded-md px-2 py-2 text-center text-xs font-semibold transition">
+                    Student
+                </a>
+                <a href="{{ route('login', ['role' => 'staff']) }}"
+                    class="{{ $role === 'staff' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600' }} rounded-md px-2 py-2 text-center text-xs font-semibold transition">
+                    Staff
+                </a>
+                <a href="{{ route('login', ['role' => 'admin']) }}"
+                    class="{{ $role === 'admin' ? 'bg-blue-500 text-white' : 'bg-white text-gray-600' }} rounded-md px-2 py-2 text-center text-xs font-semibold transition">
+                    Admin
+                </a>
+            </div>
+
             <x-auth-session-status
                 class="mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800"
                 :status="session('status')" />
@@ -97,7 +119,7 @@
 
             <p class="mt-5 text-center text-sm text-gray-600">
                 Don't have an account?
-                <a href="{{ route('register', ['role' => $role]) }}"
+                <a href="{{ route('register') }}"
                     class="font-semibold text-green-700 hover:underline">Create an account</a>
             </p>
         </div>

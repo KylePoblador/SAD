@@ -1,20 +1,16 @@
 <x-layouts.student title="Notifications" active="none">
+    <div id="student-notif-feedback" class="mb-3 hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+        All notifications marked as read.
+    </div>
+
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center justify-between gap-2 sm:justify-start">
             <h2 class="text-base font-bold text-gray-800">Notifications</h2>
-            <div class="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 sm:hidden">
-                <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600"></span>
-                Live
-            </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <div class="hidden items-center gap-2 rounded-lg bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 sm:inline-flex">
-                <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600"></span>
-                Live
-            </div>
             <button type="button" id="student-notif-mark-all"
                 class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">
-                Mark all as done
+                Mark all as read
             </button>
             <button type="button" id="student-notif-clear-all"
                 class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100">
@@ -44,6 +40,8 @@
             const clearAllUrl = @json(route('student.notification.clear-all'));
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
             const notificationFallbackUrl = @json(route('student.notification', [], false));
+            const feedbackEl = document.getElementById('student-notif-feedback');
+            let feedbackTimer = null;
 
             let eventSource = null;
 
@@ -92,8 +90,9 @@
                     'border border-gray-200 bg-white';
                 const emoji = iconEmoji(notification.icon, notification.status);
                 const ibg = iconBg(notification.icon, notification.status);
-                const unreadDot = isUnread ?
-                    '<span class="ml-2 inline-block h-2 w-2 rounded-full bg-green-500"></span>' : '';
+                const stateBadge = isEmpty ? '' : (isUnread ?
+                    '<span class="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800">Unread</span>' :
+                    '<span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Read</span>');
                 const statusLabel = (notification.status || '').toUpperCase();
                 const actionUrl = String(notification.action_url || notification.actionUrl || '').trim();
                 const href = actionUrl || notificationFallbackUrl;
@@ -101,9 +100,9 @@
                 const inner = `
                     <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm ${ibg}">${emoji}</div>
                     <div class="min-w-0 flex-1">
-                        <div class="flex items-center">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
                             <strong class="text-sm text-gray-900">${notification.title}</strong>
-                            ${unreadDot}
+                            ${stateBadge}
                         </div>
                         <div class="text-xs text-gray-500">${notification.time}</div>
                         <div class="mt-1 text-sm text-gray-600">${notification.message}</div>
@@ -184,14 +183,31 @@
                 return data;
             }
 
+            function showFeedback(message, tone) {
+                if (!feedbackEl) return;
+                feedbackEl.textContent = message;
+                feedbackEl.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-rose-200', 'bg-rose-50', 'text-rose-800');
+                if (tone === 'error') {
+                    feedbackEl.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-800');
+                } else {
+                    feedbackEl.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+                }
+                if (feedbackTimer) clearTimeout(feedbackTimer);
+                feedbackTimer = setTimeout(function() {
+                    feedbackEl.classList.add('hidden');
+                }, 2500);
+            }
+
             document.getElementById('student-notif-mark-all')?.addEventListener('click', async function() {
                 try {
                     const data = await postNotificationAction(markAllReadUrl);
                     if (data.notifications) {
                         renderNotes(data.notifications);
                     }
+                    showFeedback('All notifications are now marked as read.', 'success');
                 } catch (e) {
                     console.error(e);
+                    showFeedback('Unable to mark notifications as read right now.', 'error');
                 }
             });
 

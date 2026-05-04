@@ -50,6 +50,18 @@
                         </span>
                     </div>
                 </a>
+
+                <a href="{{ route('login', ['role' => 'admin']) }}"
+                    class="block rounded-2xl border border-blue-300 bg-blue-100 px-5 py-4 shadow-[0_6px_14px_rgba(37,99,235,0.14)] transition hover:-translate-y-0.5">
+                    <div class="flex items-start gap-4">
+                        <span
+                            class="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white">★</span>
+                        <span>
+                            <span class="block text-2xl font-semibold text-blue-900">Administrator</span>
+                            <span class="mt-1 block text-sm text-blue-800/80">Manage users across all colleges.</span>
+                        </span>
+                    </div>
+                </a>
             </div>
 
             @if (Route::has('register'))

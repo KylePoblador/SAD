@@ -28,8 +28,7 @@ class RegisteredUserController extends Controller
         $base = [
             'name' => ['required', 'string', 'max:255'],
             'password' => ['required', 'confirmed', 'min:8'],
-            'role' => ['required', 'in:student,staff'],
-            'college' => ['required', 'string', Rule::in($collegeKeys)],
+            'role' => ['required', 'in:student,staff,admin'],
             'terms_accepted' => ['accepted'],
         ];
 
@@ -52,9 +51,10 @@ class RegisteredUserController extends Controller
                 'phone' => ['prohibited'],
                 'student_id' => ['prohibited'],
             ]));
-        } else {
+        } elseif ($role === 'student') {
             $request->validate(
                 array_merge($base, [
+                    'college' => ['required', 'string', Rule::in($collegeKeys)],
                     'email' => [
                         'required',
                         'string',
@@ -72,6 +72,14 @@ class RegisteredUserController extends Controller
                     'email.regex' => 'Use your official USM email address ending with @usm.edu.ph.',
                 ]
             );
+        } else {
+            $request->validate(array_merge($base, [
+                'college' => ['nullable', 'string', Rule::in($collegeKeys)],
+                'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+                'phone' => ['prohibited'],
+                'student_id' => ['prohibited'],
+                'canteen_name' => ['prohibited'],
+            ]));
         }
 
         return DB::transaction(function () use ($request, $role) {
@@ -86,11 +94,11 @@ class RegisteredUserController extends Controller
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
                 'role' => $role,
-                'college' => $request->input('college'),
+                'college' => in_array($role, ['student', 'staff'], true) ? $request->input('college') : null,
                 'wallet_balance' => 0,
-                'phone' => $role === 'student' ? $request->input('phone') : null,
+                'phone' => $role === 'student' ? trim((string) $request->input('phone')) : '',
                 'student_id' => $role === 'student' ? $request->input('student_id') : null,
-                'canteen_name' => $role === 'staff' ? $request->input('canteen_name') : null,
+                'canteen_name' => $role === 'staff' ? trim((string) $request->input('canteen_name')) : '',
             ]);
 
             event(new Registered($user));

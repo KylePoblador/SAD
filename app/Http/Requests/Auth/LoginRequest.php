@@ -30,7 +30,7 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
-            'role' => ['nullable', 'string', 'in:student,staff'],
+            'role' => ['nullable', 'string', 'in:student,staff,admin'],
         ];
     }
 
@@ -61,6 +61,22 @@ class LoginRequest extends FormRequest
 
             throw ValidationException::withMessages([
                 'email' => 'Invalid credentials for the selected role.',
+            ]);
+        }
+
+        $user = Auth::user();
+        $isManagedRole = in_array((string) $user->role, ['student', 'staff'], true);
+        $isStale = optional($user->updated_at)->lt(now()->subMonths(6));
+        if ($isManagedRole && $isStale && (string) ($user->status ?? 'active') !== 'inactive') {
+            $user->forceFill(['status' => 'inactive'])->saveQuietly();
+        }
+        $isInactive = (string) ($user->status ?? 'active') === 'inactive' || $isStale;
+        if ($isManagedRole && $isInactive) {
+            Auth::logout();
+            RateLimiter::clear($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account is inactive due to 6+ months without activity. Please contact admin to restore access.',
             ]);
         }
 

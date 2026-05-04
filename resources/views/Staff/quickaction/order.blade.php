@@ -44,6 +44,18 @@
 
         <hr class="my-4 border-gray-100">
 
+        <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Mode of dining</p>
+        <p class="font-semibold text-gray-900">
+            {{ ($order->service_mode ?? 'dine_in') === 'takeout' ? 'Take out' : 'Dine in' }}
+        </p>
+        @if (($order->service_mode ?? 'dine_in') === 'dine_in')
+            <p class="text-sm text-gray-500">
+                Seat: {{ !empty($order->seat_number) ? '#'.$order->seat_number : 'Not assigned' }}
+            </p>
+        @endif
+
+        <hr class="my-4 border-gray-100">
+
         <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Items</p>
         <div class="space-y-2 text-sm">
             @forelse ($order->items ?? [] as $item)

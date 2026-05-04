@@ -79,11 +79,17 @@
 
         @forelse ($orders as $order)
             <div class="order-card mb-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
-                data-status="{{ $order->status == 'completed' ? 'completed' : 'pending' }}">
+                data-status="{{ $order->status === 'completed' ? 'completed' : ($order->status === 'cancelled' ? 'cancelled' : 'pending') }}">
                 <div class="mb-2 flex items-center justify-between">
                     <div>
                         <p class="text-sm font-semibold text-gray-800">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
                         <p class="text-xs text-gray-500">{{ $order->canteen }}</p>
+                        <p class="text-xs text-gray-500">
+                            {{ ($order->service_mode ?? 'dine_in') === 'takeout' ? 'Take out' : 'Dine in' }}
+                            @if (($order->service_mode ?? 'dine_in') === 'dine_in' && !empty($order->seat_number))
+                                · Seat {{ $order->seat_number }}
+                            @endif
+                        </p>
                         <p class="text-xs text-gray-400">{{ $order->created_at->format('M d, Y H:i') }}</p>
                     </div>
                     @if ($order->status == 'ready')
@@ -95,6 +101,9 @@
                     @elseif($order->status == 'completed')
                         <span
                             class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Completed</span>
+                    @elseif($order->status == 'cancelled')
+                        <span
+                            class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Cancelled</span>
                     @else
                         <span
                             class="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-900">Pending</span>
@@ -139,7 +148,16 @@
                             class="inline-flex items-center rounded-full bg-gray-100 px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-200">
                             View receipt
                         </a>
-                        @if ($order->status == 'ready')
+                        @if ($order->status === 'pending')
+                            <form action="{{ route('student.orders.cancel', $order) }}" method="POST"
+                                onsubmit="return confirm('Cancel this pending order? This action will refund your payment.');">
+                                @csrf
+                                <button type="submit"
+                                    class="rounded-full bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100">
+                                    Cancel order
+                                </button>
+                            </form>
+                        @elseif($order->status == 'ready')
                             <span
                                 class="rounded-full bg-green-600 px-3 py-2 text-xs font-medium text-white">Pick up at counter</span>
                         @elseif($order->status == 'completed' && ! $order->feedback)
@@ -149,7 +167,7 @@
                                 data-order-label="{{ $order->order_number ?? 'ORD-' . $order->id }}">
                                 Rate & feedback
                             </button>
-                        @elseif($order->status !== 'completed')
+                        @elseif(! in_array($order->status, ['completed', 'cancelled'], true))
                             <span class="rounded-full bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600">Tracking</span>
                         @endif
                     </div>

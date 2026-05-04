@@ -76,3 +76,20 @@ test('staff can register when another college already has staff', function () {
         'college' => 'cass',
     ]);
 });
+
+test('admin can register', function () {
+    $response = $this->post('/register', [
+        'name' => 'System Admin',
+        'email' => 'admin@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+        'role' => 'admin',
+        'terms_accepted' => '1',
+    ]);
+
+    $response->assertRedirect('/');
+    $this->assertDatabaseHas('users', [
+        'email' => 'admin@example.com',
+        'role' => 'admin',
+    ]);
+});

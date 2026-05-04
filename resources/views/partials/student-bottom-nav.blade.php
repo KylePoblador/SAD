@@ -1,5 +1,7 @@
 @php
     $active = $active ?? 'home';
+    $studentCarts = session('student_carts', []);
+    $cartCount = (int) collect($studentCarts)->flatten(1)->sum(fn ($line) => (int) ($line['qty'] ?? 0));
     $navItem = function (string $tab) use ($active) {
         if ($active === 'none') {
             return 'flex flex-col items-center text-xs text-gray-400';
@@ -16,8 +18,12 @@
     <a href="{{ route('student.dashboard') }}" class="{{ $navItem('home') }}">
         Home
     </a>
-    <a href="{{ route('student.cart.hub') }}" class="{{ $navItem('cart') }}">
+    <a href="{{ route('student.cart.hub') }}" class="relative {{ $navItem('cart') }}">
         Cart
+        <span id="bottom-cart-badge"
+            class="absolute -right-3 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow transition-transform {{ $cartCount > 0 ? '' : 'hidden' }}">
+            {{ $cartCount > 99 ? '99+' : $cartCount }}
+        </span>
     </a>
     <a href="{{ route('student.orders') }}" class="{{ $navItem('orders') }}">
         Orders

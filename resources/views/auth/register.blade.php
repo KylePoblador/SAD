@@ -19,6 +19,7 @@
     @php
         $selectedRole = old('role', request('role', 'student'));
         $isStaff = $selectedRole === 'staff';
+        $isAdmin = $selectedRole === 'admin';
     @endphp
 
     <div class="mx-auto w-full max-w-md overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md">
@@ -28,11 +29,13 @@
         </div>
 
         <div class="bg-stone-100 px-6 py-3">
-            <div class="mx-auto grid w-full max-w-xs grid-cols-2 gap-2 rounded-md bg-gray-200 p-1">
+            <div class="mx-auto grid w-full max-w-sm grid-cols-3 gap-2 rounded-md bg-gray-200 p-1">
                 <button type="button" id="studentTab"
                     class="rounded-md px-3 py-2 text-sm font-semibold transition">Student</button>
                 <button type="button" id="staffTab"
                     class="rounded-md px-3 py-2 text-sm font-semibold transition">Canteen Staff</button>
+                <button type="button" id="adminTab"
+                    class="rounded-md px-3 py-2 text-sm font-semibold transition">Admin</button>
             </div>
         </div>
 
@@ -53,16 +56,19 @@
                 <input id="email" name="email" type="email" value="{{ old('email') }}" required
                     autocomplete="username"
                     class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
-                <p id="email-hint-student" class="mt-1 text-[11px] text-gray-500 {{ $isStaff ? 'hidden' : '' }}">
+                <p id="email-hint-student" class="mt-1 text-[11px] text-gray-500 {{ ($isStaff || $isAdmin) ? 'hidden' : '' }}">
                     Students: must be <strong>@usm.edu.ph</strong> (official USM email).
                 </p>
                 <p id="email-hint-staff" class="mt-1 text-[11px] text-gray-500 {{ $isStaff ? '' : 'hidden' }}">
                     Staff: any valid email is allowed.
                 </p>
+                <p id="email-hint-admin" class="mt-1 text-[11px] text-gray-500 {{ $isAdmin ? '' : 'hidden' }}">
+                    Admin: any valid email is allowed.
+                </p>
                 <x-input-error :messages="$errors->get('email')" class="mt-1" />
             </div>
 
-            <div data-student-only class="space-y-4 {{ $isStaff ? 'hidden' : '' }}">
+            <div data-student-only class="space-y-4 {{ ($isStaff || $isAdmin) ? 'hidden' : '' }}">
                 <div>
                     <label for="phone" class="mb-1 block text-xs font-semibold text-gray-700">Phone number *</label>
                     <input id="phone" name="phone" type="tel" value="{{ old('phone') }}"
@@ -89,9 +95,9 @@
                 </div>
             </div>
 
-            <div>
+            <div data-college-only class="{{ $isAdmin ? 'hidden' : '' }}">
                 <label for="college" class="mb-1 block text-xs font-semibold text-gray-700">Select college / canteen *</label>
-                <select id="college" name="college" required
+                <select id="college" name="college" {{ $isAdmin ? '' : 'required' }}
                     class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
                     <option value="">Choose your college</option>
                     <option value="ceit" {{ old('college') === 'ceit' ? 'selected' : '' }}>CEIT - College of Engineering and Information Technology</option>
@@ -110,7 +116,7 @@
                 <x-input-error :messages="$errors->get('college')" class="mt-1" />
             </div>
 
-            <p class="text-xs text-gray-500">Students: choose your college. Canteen staff: choose the college your canteen serves.</p>
+            <p data-college-only class="text-xs text-gray-500 {{ $isAdmin ? 'hidden' : '' }}">Students: choose your college. Canteen staff: choose the college your canteen serves.</p>
             <p data-staff-only class="text-xs font-medium text-amber-800 {{ $isStaff ? '' : 'hidden' }}">Only one canteen staff account is allowed per college. If your canteen already has staff, contact the administrator.</p>
 
             <div>
@@ -190,7 +196,7 @@
 
             <button type="submit" id="submitBtn"
                 class="w-full rounded-md bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-green-700">
-                Register as {{ $isStaff ? 'Canteen Staff' : 'Student' }}
+                Register as {{ $isStaff ? 'Canteen Staff' : ($isAdmin ? 'Admin' : 'Student') }}
             </button>
 
             <p class="pt-2 text-center text-sm text-gray-600">
@@ -265,24 +271,29 @@
     <script>
         const studentTab = document.getElementById('studentTab');
         const staffTab = document.getElementById('staffTab');
+        const adminTab = document.getElementById('adminTab');
         const roleInput = document.getElementById('roleInput');
         const submitBtn = document.getElementById('submitBtn');
+        const collegeSelect = document.getElementById('college');
 
         function syncRoleFields(role) {
             var staff = role === 'staff';
+            var admin = role === 'admin';
             var hintStu = document.getElementById('email-hint-student');
             var hintStaff = document.getElementById('email-hint-staff');
+            var hintAdmin = document.getElementById('email-hint-admin');
             var emailInp = document.getElementById('email');
-            if (hintStu) hintStu.classList.toggle('hidden', staff);
+            if (hintStu) hintStu.classList.toggle('hidden', staff || admin);
             if (hintStaff) hintStaff.classList.toggle('hidden', !staff);
+            if (hintAdmin) hintAdmin.classList.toggle('hidden', !admin);
             if (emailInp) {
-                emailInp.placeholder = staff ? 'you@example.com' : 'name.lastname@usm.edu.ph';
+                emailInp.placeholder = (staff || admin) ? 'you@example.com' : 'name.lastname@usm.edu.ph';
             }
             document.querySelectorAll('[data-student-only]').forEach(function(wrap) {
-                wrap.classList.toggle('hidden', staff);
+                wrap.classList.toggle('hidden', staff || admin);
                 wrap.querySelectorAll('input').forEach(function(inp) {
-                    inp.disabled = staff;
-                    if (!staff) {
+                    inp.disabled = staff || admin;
+                    if (!staff && !admin) {
                         inp.setAttribute('required', 'required');
                     } else {
                         inp.removeAttribute('required');
@@ -300,24 +311,47 @@
                     }
                 });
             });
+            if (collegeSelect) {
+                document.querySelectorAll('[data-college-only]').forEach(function(wrap) {
+                    wrap.classList.toggle('hidden', admin);
+                });
+                document.querySelectorAll('[data-admin-only]').forEach(function(wrap) {
+                    wrap.classList.toggle('hidden', !admin);
+                });
+                collegeSelect.disabled = admin;
+                if (admin) {
+                    collegeSelect.removeAttribute('required');
+                    collegeSelect.value = '';
+                } else {
+                    collegeSelect.setAttribute('required', 'required');
+                }
+            }
         }
 
         function setRole(role) {
             const studentActive = role === 'student';
+            const staffActive = role === 'staff';
+            const adminActive = role === 'admin';
             roleInput.value = role;
             studentTab.className = studentActive ?
+                'rounded-md bg-green-500 px-3 py-2 text-sm font-semibold text-white transition' :
+                'rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition';
+            staffTab.className = staffActive ?
                 'rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white transition' :
                 'rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition';
-            staffTab.className = !studentActive ?
-                'rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white transition' :
+            adminTab.className = adminActive ?
+                'rounded-md bg-blue-500 px-3 py-2 text-sm font-semibold text-white transition' :
                 'rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition';
-            submitBtn.textContent = studentActive ? 'Register as Student' : 'Register as Canteen Staff';
+            submitBtn.textContent = studentActive
+                ? 'Register as Student'
+                : (staffActive ? 'Register as Canteen Staff' : 'Register as Admin');
             syncRoleFields(role);
         }
 
         studentTab.addEventListener('click', () => setRole('student'));
         staffTab.addEventListener('click', () => setRole('staff'));
-        setRole(roleInput.value === 'staff' ? 'staff' : 'student');
+        adminTab.addEventListener('click', () => setRole('admin'));
+        setRole(['student', 'staff', 'admin'].includes(roleInput.value) ? roleInput.value : 'student');
 
         document.querySelectorAll('[data-password-toggle]').forEach(function(btn) {
             btn.addEventListener('click', function() {

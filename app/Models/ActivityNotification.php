@@ -7,17 +7,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ActivityNotification extends Model
 {
-    public const TYPE_DEPOSIT_INQUIRY_STUDENT = 'deposit_inquiry_student';
-
-    public const TYPE_DEPOSIT_INQUIRY_STAFF = 'deposit_inquiry_staff';
-
-    public const TYPE_DEPOSIT_INQUIRY_DONE = 'deposit_inquiry_done';
-
     public const TYPE_WALLET_LOADED = 'wallet_loaded';
 
     public const TYPE_SEAT_RESERVED = 'seat_reserved';
 
     public const TYPE_SEAT_RELEASED = 'seat_released';
+
+    public const TYPE_WALLET_TRANSFER_SENT = 'wallet_transfer_sent';
+
+    public const TYPE_WALLET_TRANSFER_RECEIVED = 'wallet_transfer_received';
+
+    public const TYPE_QR_PAYMENT_PROCESSED = 'qr_payment_processed';
+    public const TYPE_ORDER_PLACED = 'order_placed';
+    public const TYPE_ORDER_STATUS_UPDATED = 'order_status_updated';
+    public const TYPE_FEEDBACK_RECEIVED = 'feedback_received';
+    public const TYPE_FEEDBACK_REPLIED = 'feedback_replied';
+    public const TYPE_WALLET_LOAD_PROCESSED = 'wallet_load_processed';
+    public const TYPE_QR_SCAN_PAYMENT_PROCESSED = 'qr_scan_payment_processed';
 
     protected $fillable = [
         'user_id',
@@ -44,11 +50,17 @@ class ActivityNotification extends Model
     {
         return match ($this->type) {
             self::TYPE_WALLET_LOADED,
-            self::TYPE_DEPOSIT_INQUIRY_DONE,
             self::TYPE_SEAT_RESERVED => 'completed',
             self::TYPE_SEAT_RELEASED => 'ready',
-            self::TYPE_DEPOSIT_INQUIRY_STUDENT => 'preparing',
-            self::TYPE_DEPOSIT_INQUIRY_STAFF => 'pending',
+            self::TYPE_WALLET_TRANSFER_SENT,
+            self::TYPE_WALLET_TRANSFER_RECEIVED,
+            self::TYPE_QR_PAYMENT_PROCESSED,
+            self::TYPE_ORDER_PLACED,
+            self::TYPE_ORDER_STATUS_UPDATED,
+            self::TYPE_FEEDBACK_RECEIVED,
+            self::TYPE_FEEDBACK_REPLIED,
+            self::TYPE_WALLET_LOAD_PROCESSED,
+            self::TYPE_QR_SCAN_PAYMENT_PROCESSED => 'completed',
             default => 'info',
         };
     }
@@ -56,12 +68,18 @@ class ActivityNotification extends Model
     public function getIconKeyAttribute(): string
     {
         return match ($this->type) {
-            self::TYPE_WALLET_LOADED,
-            self::TYPE_DEPOSIT_INQUIRY_STUDENT,
-            self::TYPE_DEPOSIT_INQUIRY_STAFF,
-            self::TYPE_DEPOSIT_INQUIRY_DONE => 'wallet',
+            self::TYPE_WALLET_LOADED => 'wallet',
             self::TYPE_SEAT_RESERVED,
             self::TYPE_SEAT_RELEASED => 'seat',
+            self::TYPE_WALLET_TRANSFER_SENT,
+            self::TYPE_WALLET_TRANSFER_RECEIVED,
+            self::TYPE_QR_PAYMENT_PROCESSED,
+            self::TYPE_WALLET_LOAD_PROCESSED,
+            self::TYPE_QR_SCAN_PAYMENT_PROCESSED => 'wallet',
+            self::TYPE_ORDER_PLACED,
+            self::TYPE_ORDER_STATUS_UPDATED,
+            self::TYPE_FEEDBACK_RECEIVED,
+            self::TYPE_FEEDBACK_REPLIED => 'order',
             default => 'bell',
         };
     }

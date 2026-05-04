@@ -87,10 +87,27 @@
                 }
             }
 
+            function setStaffUnreadBadge(countLike) {
+                const count = Number(countLike || 0);
+                if (count > 0) {
+                    badge.textContent = count > 99 ? '99+' : String(count);
+                    badge.classList.remove('hidden');
+                    badge.classList.add('flex');
+                } else {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                }
+            }
+
+            window.addEventListener('staff-unread-count:update', function(event) {
+                setStaffUnreadBadge(event?.detail?.count ?? 0);
+            });
+
             updateStaffUnreadBadge();
             setInterval(updateStaffUnreadBadge, 5000);
         })();
     </script>
+    @stack('scripts')
 </body>
 
 </html>

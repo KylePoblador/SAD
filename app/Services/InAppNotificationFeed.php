@@ -73,7 +73,10 @@ class InAppNotificationFeed
 
         $orders = Order::query()
             ->where('user_id', $userId)
-            ->where('is_read', false)
+            ->where(function ($q) {
+                $q->where('is_read', false)
+                    ->orWhereNull('is_read');
+            })
             ->when($since, fn ($q) => $q->where('created_at', '>', $since))
             ->count();
 
@@ -155,7 +158,10 @@ class InAppNotificationFeed
 
         Order::query()
             ->where('user_id', $userId)
-            ->where('is_read', false)
+            ->where(function ($q) {
+                $q->where('is_read', false)
+                    ->orWhereNull('is_read');
+            })
             ->update(['is_read' => true]);
     }
 
@@ -174,6 +180,9 @@ class InAppNotificationFeed
             ->where('user_id', $staffUserId)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
+        // Keep existing notifications visible in the feed; this action should only
+        // mark items as read, not hide historical entries.
+        User::query()->whereKey($staffUserId)->update(['notification_feed_cleared_at' => null]);
     }
 
     public static function clearStaffNotificationFeed(int $staffUserId): void
@@ -230,6 +239,10 @@ class InAppNotificationFeed
 
     private static function serializeStaffOrder(Order $order): array
     {
+        $modeLabel = ($order->service_mode ?? 'dine_in') === 'takeout' ? 'Take out' : 'Dine in';
+        $seatSuffix = ($order->service_mode ?? 'dine_in') === 'dine_in' && ! empty($order->seat_number)
+            ? ' · Seat #'.$order->seat_number
+            : '';
         $statusText = match ($order->status) {
             'pending' => 'new order received',
             'preparing' => 'order is being prepared',
@@ -242,12 +255,12 @@ class InAppNotificationFeed
             '_ts' => $order->created_at->timestamp,
             'nid' => 'o:'.$order->id,
             'title' => "Order {$order->order_number} {$statusText}",
-            'message' => 'Total: ₱'.$order->total,
+            'message' => $modeLabel.$seatSuffix.' · Total: ₱'.$order->total,
             'time' => $order->created_at->diffForHumans(),
             'status' => $order->status,
             'is_read' => true,
             'icon' => 'order',
-            'action_url' => route('staff.orders', [], false),
+            'action_url' => route('staff.orders', ['status' => 'pending'], false),
         ];
     }
 
@@ -271,11 +284,10 @@ class InAppNotificationFeed
     private static function studentActivityActionUrl(ActivityNotification $n): string
     {
         return match ($n->type) {
-            ActivityNotification::TYPE_WALLET_LOADED,
-            ActivityNotification::TYPE_DEPOSIT_INQUIRY_STUDENT,
-            ActivityNotification::TYPE_DEPOSIT_INQUIRY_DONE => route('student.wallet', [], false),
+            ActivityNotification::TYPE_WALLET_LOADED => route('student.wallet', [], false),
             ActivityNotification::TYPE_SEAT_RESERVED,
             ActivityNotification::TYPE_SEAT_RELEASED => route('student.dashboard', [], false),
+            ActivityNotification::TYPE_FEEDBACK_REPLIED => route('student.orders', [], false),
             default => route('student.notification', [], false),
         };
     }
@@ -283,7 +295,9 @@ class InAppNotificationFeed
     private static function staffActivityActionUrl(ActivityNotification $n): string
     {
         return match ($n->type) {
-            ActivityNotification::TYPE_DEPOSIT_INQUIRY_STAFF => route('staff.wallet', [], false),
+            ActivityNotification::TYPE_ORDER_PLACED,
+            ActivityNotification::TYPE_ORDER_STATUS_UPDATED => route('staff.orders', ['status' => 'pending'], false),
+            ActivityNotification::TYPE_FEEDBACK_RECEIVED => route('staff.feedbacks', [], false),
             default => route('staff.notification', [], false),
         };
     }
@@ -307,7 +321,7 @@ class InAppNotificationFeed
         return [
             'nid' => 'none',
             'title' => 'No notifications yet',
-            'message' => 'Orders and wallet deposit alerts will show up here.',
+            'message' => 'Orders and wallet updates will show up here.',
             'time' => '',
             'status' => 'empty',
             'is_read' => true,

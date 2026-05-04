@@ -28,6 +28,19 @@
                 {{ session('error') }}
             </div>
         @endif
+        @if (isset($currentSeat) && $currentSeat)
+            <div class="mx-auto mt-4 max-w-xl rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-900">
+                <p class="font-semibold">Current reserved seat: #{{ $currentSeat }}</p>
+                <p class="mt-1 text-xs text-emerald-800">Pick another available seat below to change it, or cancel your reservation.</p>
+                <form action="{{ route('student.cancel.seat', ['college' => $college]) }}" method="POST" class="mt-3">
+                    @csrf
+                    <button type="submit"
+                        class="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">
+                        Cancel reservation
+                    </button>
+                </form>
+            </div>
+        @endif
 
         <div class="mt-6 flex flex-wrap justify-center gap-2">
             <button type="button"
@@ -63,7 +76,7 @@
 
             <button type="submit"
                 class="rounded-xl bg-green-600 px-8 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700">
-                Confirm seat
+                {{ isset($currentSeat) && $currentSeat ? 'Change seat' : 'Confirm seat' }}
             </button>
         </form>
     </div>

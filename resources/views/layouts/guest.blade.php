@@ -1,5 +1,22 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ config('app.name', 'CoinMeal') }}</title>
+    @include('partials.coinmeal-assets')
+</head>
+<body class="min-h-screen bg-gray-100 font-sans text-gray-900 antialiased">
+    <div class="coinmeal-container flex min-h-screen items-center justify-center py-8">
+        <div class="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            {{ $slot }}
+        </div>
+    </div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

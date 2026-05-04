@@ -65,6 +65,20 @@
                     <span class="text-gray-500">Status</span>
                     <span class="font-medium capitalize text-gray-900">{{ $order->status }}</span>
                 </div>
+                <div class="flex justify-between gap-4">
+                    <span class="text-gray-500">Dining mode</span>
+                    <span class="font-medium text-gray-900">
+                        {{ ($order->service_mode ?? 'dine_in') === 'takeout' ? 'Take out' : 'Dine in' }}
+                    </span>
+                </div>
+                @if (($order->service_mode ?? 'dine_in') === 'dine_in')
+                    <div class="flex justify-between gap-4">
+                        <span class="text-gray-500">Seat reserved no.</span>
+                        <span class="font-medium text-gray-900">
+                            {{ $order->seat_number ? 'Seat #'.$order->seat_number : 'Not assigned' }}
+                        </span>
+                    </div>
+                @endif
             </div>
 
             <hr class="my-4 border-gray-100">

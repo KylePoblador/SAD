@@ -13,6 +13,8 @@ class Order extends Model
         'status',
         'total',
         'canteen_id',
+        'service_mode',
+        'seat_number',
         'is_read',
     ];
 

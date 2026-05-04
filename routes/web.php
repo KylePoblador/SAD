@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
 use App\Models\ActivityNotification;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 Route::get('/', function () {
@@ -35,9 +37,14 @@ Route::get('/dashboard', function () {
         return redirect('/');
     }
 
-    return Auth::user()->role === 'student'
-        ? redirect()->route('student.dashboard')
-        : redirect()->route('staff.dashboard');
+    if (Auth::user()->role === 'student') {
+        return redirect()->route('student.dashboard');
+    }
+    if (Auth::user()->role === 'admin') {
+        return redirect()->route('admin.dashboard');
+    }
+
+    return redirect()->route('staff.dashboard');
 })
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
@@ -78,6 +85,9 @@ Route::get('/student/profile', [StudentController::class, 'profile'])
 Route::get('/student/orders', [StudentController::class, 'orders'])
     ->middleware(['auth', 'verified'])
     ->name('student.orders');
+Route::post('/student/orders/{order}/cancel', [StudentController::class, 'cancelPendingOrder'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.orders.cancel');
 
 Route::get('/student/orders/{order}/receipt', [StudentController::class, 'orderReceipt'])
     ->middleware(['auth', 'verified'])
@@ -91,9 +101,39 @@ Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'up
     ->middleware(['auth', 'verified'])
     ->name('student.wallet.update');
 
-Route::post('/student/wallet/deposit-inquiry', [StudentController::class, 'storeWalletDepositInquiry'])
+Route::post('/student/wallet/connection', [StudentController::class, 'addConnection'])
     ->middleware(['auth', 'verified'])
-    ->name('student.wallet.deposit-inquiry');
+    ->name('student.wallet.connection');
+Route::get('/student/wallet/connection-search', [StudentController::class, 'searchStudentsForConnection'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.connection-search');
+Route::post('/student/wallet/connection-request', [StudentController::class, 'sendConnectionRequest'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.connection-request');
+Route::post('/student/wallet/connection-request/{connectionRequest}/respond', [StudentController::class, 'respondConnectionRequest'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.connection-request.respond');
+Route::delete('/student/wallet/connection-request/{connectionRequest}', [StudentController::class, 'cancelConnectionRequest'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.connection-request.cancel');
+Route::delete('/student/wallet/connection/{friend}', [StudentController::class, 'removeConnection'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.connection.remove');
+Route::post('/student/wallet/transfer', [StudentController::class, 'transferWallet'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.transfer');
+Route::get('/student/wallet/transfers/{walletTransfer}/receipt', [StudentController::class, 'walletTransferReceipt'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.transfer.receipt');
+Route::get('/student/wallet/transfers/{walletTransfer}/receipt/download', [StudentController::class, 'downloadWalletTransferReceipt'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.transfer.receipt.download');
+Route::post('/student/wallet/qr', [StudentController::class, 'createPaymentQr'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.qr');
+Route::post('/student/wallet/load-qr', [StudentController::class, 'createWalletLoadQr'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.load-qr');
 
 Route::get('/student/notification', [StudentController::class, 'notifications'])
     ->middleware(['auth', 'verified'])
@@ -184,6 +224,13 @@ Route::middleware('auth')->group(function () {
     Route::patch('/staff/menu/{menuItem}', [DashboardController::class, 'updateMenuItem'])->name('staff.menu.update');
 
     Route::get('/staff/wallet', [DashboardController::class, 'wallet'])->name('staff.wallet');
+    Route::get('/staff/scan-pay', [DashboardController::class, 'scanPay'])->name('staff.scan-pay');
+    Route::post('/staff/scan-pay', [DashboardController::class, 'processScanPay'])->name('staff.scan-pay.process');
+    Route::post('/staff/scan-pay/confirm-wallet-load', [DashboardController::class, 'confirmWalletLoadQr'])->name('staff.scan-pay.confirm-wallet-load');
+    Route::get('/staff/scan-pay/wallet-load-receipt/{walletLoadLog}', [DashboardController::class, 'walletLoadReceipt'])
+        ->name('staff.scan-pay.wallet-load-receipt');
+    Route::get('/staff/scan-pay/wallet-load-receipt/{walletLoadLog}/download', [DashboardController::class, 'downloadWalletLoadReceipt'])
+        ->name('staff.scan-pay.wallet-load-receipt.download');
 
     Route::get('/staff/seats', [DashboardController::class, 'seats'])->name('staff.seats');
     Route::post('/staff/seats/release', [DashboardController::class, 'releaseSeat'])->name('staff.seats.release');
@@ -195,9 +242,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
     Route::get('/staff/reports/print', [DashboardController::class, 'reportsPrint'])->name('staff.reports.print');
 
-    Route::patch('/staff/deposit-inquiries/{walletDepositInquiry}/done', [DashboardController::class, 'completeDepositInquiry'])
-        ->name('staff.deposit-inquiry.done');
-
     /*
     |--------------------------------------------------------------------------
     | STUDENT CANTEEN ROUTES
@@ -206,10 +250,15 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/student/canteen/{college}', [StudentController::class, 'showCanteen'])
         ->name('student.canteen');
+    Route::post('/student/canteen/{college}/mode', [StudentController::class, 'setCanteenMode'])
+        ->name('student.canteen.mode');
+    Route::post('/student/canteen/{college}/join-reservation', [StudentController::class, 'joinSeatReservation'])
+        ->name('student.canteen.join-reservation');
 
     Route::get('/student/cart', [StudentController::class, 'cartHub'])->name('student.cart.hub');
     Route::get('/student/cart/{college}', [StudentController::class, 'showCart'])->name('student.cart');
     Route::post('/student/cart/{college}/add', [StudentController::class, 'cartAdd'])->name('student.cart.add');
+    Route::post('/student/cart/{college}/buy-now', [StudentController::class, 'cartBuyNow'])->name('student.cart.buy-now');
     Route::post('/student/cart/{college}/qty', [StudentController::class, 'cartSetQty'])->name('student.cart.qty');
     Route::post('/student/cart/{college}/remove', [StudentController::class, 'cartRemoveItem'])->name('student.cart.remove');
     Route::post('/student/cart/{college}/checkout', [StudentController::class, 'cartCheckout'])->name('student.cart.checkout');
@@ -224,12 +273,58 @@ Route::middleware('auth')->group(function () {
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->pluck('seat_number')
             ->all();
+        $currentSeat = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->value('seat_number');
+        if ($currentSeat === null) {
+            $currentSeat = DB::table('seat_reservations as sr')
+                ->join('reservation_participants as rp', 'rp.seat_reservation_id', '=', 'sr.id')
+                ->whereRaw('LOWER(TRIM(sr.college)) = ?', [$collegeNorm])
+                ->where('rp.user_id', auth()->id())
+                ->value('sr.seat_number');
+        }
 
         return view('student.reservation.reserve', [
             'college' => $collegeNorm,
             'occupied' => $occupied,
+            'currentSeat' => $currentSeat ? (int) $currentSeat : null,
         ]);
     })->name('student.reserve');
+
+    Route::post('/student/reserve/{college}/cancel', function (Request $request, string $college) {
+        $collegeNorm = UserCanteenBalance::normalizedCollege((string) $college);
+        if (! array_key_exists($collegeNorm, config('canteens', []))) {
+            abort(404);
+        }
+
+        DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
+        DB::table('reservation_participants')
+            ->where('user_id', $request->user()->id)
+            ->whereIn('seat_reservation_id', function ($query) use ($collegeNorm): void {
+                $query->select('id')
+                    ->from('seat_reservations')
+                    ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm]);
+            })
+            ->delete();
+
+        $canteenLabel = config('canteens')[$collegeNorm]['label'] ?? strtoupper($collegeNorm);
+        ActivityNotification::notifyUser(
+            $request->user()->id,
+            ActivityNotification::TYPE_SEAT_RESERVED,
+            'Seat reservation canceled',
+            'Your seat reservation at '.$canteenLabel.' was canceled.',
+            null
+        );
+
+        return redirect()
+            ->route('student.canteen', ['college' => $collegeNorm])
+            ->with('status', 'Seat reservation canceled.');
+    })->name('student.cancel.seat');
 
     Route::post('/student/confirm-seat', function (Request $request) {
         $canteenKeys = array_keys(config('canteens', []));
@@ -263,10 +358,28 @@ Route::middleware('auth')->group(function () {
                 ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
                 ->delete();
 
-            DB::table('seat_reservations')->insert([
+            DB::table('reservation_participants')
+                ->where('user_id', $request->user()->id)
+                ->whereIn('seat_reservation_id', function ($query) use ($collegeNorm): void {
+                    $query->select('id')
+                        ->from('seat_reservations')
+                        ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm]);
+                })
+                ->delete();
+
+            $reservationId = DB::table('seat_reservations')->insertGetId([
                 'user_id' => $request->user()->id,
+                'host_user_id' => $request->user()->id,
+                'reservation_code' => strtoupper(Str::random(8)),
                 'college' => $collegeNorm,
                 'seat_number' => $validated['seat'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('reservation_participants')->insert([
+                'seat_reservation_id' => $reservationId,
+                'user_id' => $request->user()->id,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -286,6 +399,12 @@ Route::middleware('auth')->group(function () {
             ->with('seat', $validated['seat']);
 
     })->name('student.confirm.seat');
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/admin/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+    Route::patch('/admin/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
+    Route::delete('/admin/users/{user}', [AdminController::class, 'destroyUser'])->name('admin.users.destroy');
 });
 
 require __DIR__.'/auth.php';

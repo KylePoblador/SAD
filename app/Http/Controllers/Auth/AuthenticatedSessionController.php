@@ -18,7 +18,7 @@ class AuthenticatedSessionController extends Controller
 
         if ($role !== null) {
             $request->validate([
-                'role' => ['string', Rule::in(['student', 'staff'])],
+                'role' => ['string', Rule::in(['student', 'staff', 'admin'])],
             ]);
         }
 
@@ -36,11 +36,15 @@ class AuthenticatedSessionController extends Controller
 
         $role = Auth::user()->role;
 
+        if ($role === 'admin') {
+            return redirect()->route('admin.dashboard');
+        }
+
         if ($role === 'staff') {
             return redirect()->route('dashboard');
-        } else {
-            return redirect()->route('student.dashboard');
         }
+
+        return redirect()->route('student.dashboard');
     }
 
     public function destroy(Request $request): RedirectResponse
