@@ -14,23 +14,27 @@
 
     <header class="sticky top-0 z-10 border-b border-emerald-100/80 bg-white/90 shadow-sm backdrop-blur-sm">
         <div class="coinmeal-container flex items-start justify-between gap-3 py-3">
-        <div class="min-w-0">
-            <h1 class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-lg font-bold text-transparent">
-                {{ $staffCollegeName ?? 'Assigned canteen' }}</h1>
-            <p class="text-xs font-medium text-gray-500">Staff dashboard</p>
-            @if (!empty($collegeCode))
-                <p class="mt-0.5 inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-800">{{ $collegeCode }}</p>
-            @endif
-        </div>
-        <a href="{{ route('staff.notification') }}"
-            class="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <span id="staff-unread-badge"
-                class="absolute -right-1 -top-1 hidden h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">0</span>
-        </a>
+            <div class="min-w-0">
+                <h1
+                    class="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-lg font-bold text-transparent">
+                    {{ $staffCollegeName ?? 'Assigned canteen' }}</h1>
+                <p class="text-xs font-medium text-gray-500">Staff dashboard</p>
+                @if (!empty($collegeCode))
+                    <p
+                        class="mt-0.5 inline-block rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-800">
+                        {{ $collegeCode }}</p>
+                @endif
+            </div>
+            <a href="{{ route('staff.notification') }}"
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <span id="staff-unread-badge"
+                    class="absolute -right-1 -top-1 hidden h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">0</span>
+            </a>
         </div>
     </header>
 
@@ -51,7 +55,8 @@
             <div
                 class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm ring-1 ring-emerald-100/50">
                 <div class="mb-2 flex items-center gap-2">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-sm">
+                    <span
+                        class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-sm">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round"
                                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -90,7 +95,8 @@
             <div
                 class="rounded-2xl border border-orange-200/60 bg-gradient-to-br from-orange-50 to-white p-4 shadow-sm ring-1 ring-orange-100/50">
                 <div class="mb-2 flex items-center gap-2">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm">
+                    <span
+                        class="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round"
                                 d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
@@ -166,7 +172,8 @@
                 <span
                     class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-md transition group-hover:scale-105">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h3v3H7V7zm7 0h3v3h-3V7zM7 14h3v3H7v-3zm7 2h3m-3-2h3v5h-5v-3m-2 3H5V5h14v5" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M7 7h3v3H7V7zm7 0h3v3h-3V7zM7 14h3v3H7v-3zm7 2h3m-3-2h3v5h-5v-3m-2 3H5V5h14v5" />
                     </svg>
                 </span>
                 <span class="text-sm font-bold text-indigo-900">QR scanner</span>
@@ -182,6 +189,17 @@
                 </span>
                 <span class="text-sm font-bold text-indigo-900">Reports</span>
             </a>
+            <a href="{{ route('staff.refunds') }}"
+                class="group flex flex-col items-center gap-2 rounded-2xl border border-green-200/70 bg-gradient-to-br from-green-50 via-white to-emerald-50/30 p-4 text-center shadow-sm transition hover:border-green-400 hover:shadow-md">
+                <span
+                    class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500 text-white shadow-md transition group-hover:scale-105">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </span>
+                <span class="text-sm font-bold text-green-900">Refunds</span>
+            </a>
         </div>
 
         <div class="flex items-center gap-2 pt-1">
@@ -196,7 +214,9 @@
                     'ready' => 'bg-green-100 text-green-800 ring-green-300/80',
                     'completed' => 'bg-green-600 text-white ring-green-700/80',
                 ];
-                $pill = $statusColors[strtolower($order->status ?? '')] ?? 'bg-violet-100 text-violet-900 ring-violet-200/80';
+                $pill =
+                    $statusColors[strtolower($order->status ?? '')] ??
+                    'bg-violet-100 text-violet-900 ring-violet-200/80';
             @endphp
             <div
                 class="flex items-center justify-between rounded-2xl border border-gray-100/80 bg-white/90 px-4 py-3 shadow-sm ring-1 ring-gray-100/60 backdrop-blur-sm">
@@ -232,7 +252,8 @@
         <a href="{{ route('staff.menu') }}" class="flex flex-col items-center text-xs text-gray-400">
             <svg xmlns="http://www.w3.org/2000/svg" class="mb-0.5 h-5 w-5" fill="none" viewBox="0 0 24 24"
                 stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
             Menu
         </a>

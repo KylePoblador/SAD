@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RefundController;
 use App\Http\Controllers\StudentController;
 use App\Models\ActivityNotification;
 use App\Models\SeatLayout;
@@ -64,6 +65,11 @@ Route::get('/dashboard', function () {
 Route::get('/admin/dashboard', [AdminController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('admin.dashboard');
+
+Route::get('/admin/refunds', [RefundController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.refunds');
+
 Route::get('/admin/coupons', [AdminController::class, 'coupons'])
     ->middleware(['auth', 'verified'])
     ->name('admin.coupons');
@@ -86,6 +92,27 @@ Route::post('/admin/users/{user}/inactive-label', [AdminController::class, 'togg
 Route::get('/staff/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('staff.dashboard');
+
+/*
+|--------------------------------------------------------------------------
+| STAFF REFUND MANAGEMENT
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/staff/refunds', [RefundController::class, 'staffPage'])
+    ->middleware(['auth', 'verified'])
+    ->name('staff.refunds');
+
+Route::get('/api/students', [RefundController::class, 'getStudents'])
+    ->middleware(['auth', 'verified']);
+
+Route::post('/staff/refunds', [RefundController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('staff.refunds.store');
+
+Route::get('/staff/refunds/history', [RefundController::class, 'staffHistory'])
+    ->middleware(['auth', 'verified'])
+    ->name('staff.refunds.history');
 
 /*
 |--------------------------------------------------------------------------
@@ -127,6 +154,14 @@ Route::get('/student/wallet', [StudentController::class, 'wallet'])
 Route::get('/student/wallet/receipts/{receipt}', [StudentController::class, 'showWalletReceipt'])
     ->middleware(['auth', 'verified'])
     ->name('student.wallet.receipts.show');
+
+Route::get('/student/refunds', [RefundController::class, 'studentPage'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.refunds');
+
+Route::get('/student/refunds/history/{studentId}', [RefundController::class, 'studentHistory'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.refunds.history');
 
 Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'updateWalletBalance'])
     ->middleware(['auth', 'verified'])

@@ -2,7 +2,8 @@
     @if (session('status') === 'deposit-inquiry-sent')
         <div class="mb-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900 shadow-sm">
             <p class="font-semibold">Your canteen has been notified.</p>
-            <p class="mt-1 text-green-800/90">Go to <strong>{{ session('deposit_target') }}</strong>, pay cash at the counter —
+            <p class="mt-1 text-green-800/90">Go to <strong>{{ session('deposit_target') }}</strong>, pay cash at the
+                counter —
                 staff will load your wallet when you arrive.</p>
             @if (session('deposit_college_slug'))
                 <a href="{{ route('student.canteen', session('deposit_college_slug')) }}"
@@ -37,19 +38,23 @@
     <div class="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <h3 class="mb-3 text-sm font-bold text-gray-800">Balance per canteen</h3>
         <p class="mb-3 text-xs leading-relaxed text-gray-600">When you browse a canteen, you only see money for
-            <strong>that</strong> place. Here you see every canteen and how they add up to your total above.</p>
+            <strong>that</strong> place. Here you see every canteen and how they add up to your total above.
+        </p>
         @forelse ($wallet['canteen_balances'] ?? [] as $row)
-            <div class="mb-2 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5 last:mb-0">
+            <div
+                class="mb-2 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5 last:mb-0">
                 <span class="text-sm font-medium text-gray-800">{{ $row['label'] }}</span>
                 <span class="text-sm font-bold text-green-700">₱{{ number_format($row['balance'], 2) }}</span>
             </div>
         @empty
-            <p class="text-sm text-gray-500">No canteens listed yet. When staff open a canteen, it will appear here (₱0.00
+            <p class="text-sm text-gray-500">No canteens listed yet. When staff open a canteen, it will appear here
+                (₱0.00
                 until you top up there).</p>
         @endforelse
     </div>
 
-    <div class="mt-4 space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/95 px-4 py-3 text-xs leading-relaxed text-emerald-950 shadow-sm">
+    <div
+        class="mt-4 space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/95 px-4 py-3 text-xs leading-relaxed text-emerald-950 shadow-sm">
         <p class="font-bold text-emerald-900">Top-up request</p>
         <p>A <strong>Notify canteen</strong> message does not move money yet. Your balance for that canteen goes up only
             after staff <strong>confirm load</strong> when you pay cash at their counter.</p>
@@ -68,14 +73,16 @@
                 </svg>
             </span>
             <span class="text-lg font-bold tracking-tight text-amber-900">Load wallet</span>
-            <span class="mt-1.5 max-w-[260px] text-center text-xs font-medium leading-snug text-amber-800/75">Pick a canteen,
+            <span class="mt-1.5 max-w-[260px] text-center text-xs font-medium leading-snug text-amber-800/75">Pick a
+                canteen,
                 notify staff, then pay at the counter.</span>
         </span>
     </button>
 
     <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm">
         <h3 class="text-sm font-bold text-indigo-900">Connect · Share coins</h3>
-        <p class="mt-1 text-xs text-indigo-900/80">Search by name, username/student ID, or email. CEIT balance transfers are CEIT-to-CEIT only.</p>
+        <p class="mt-1 text-xs text-indigo-900/80">Search by name, username/student ID, or email. CEIT balance transfers
+            are CEIT-to-CEIT only.</p>
         @if ($errors->has('connect'))
             <p class="mt-2 text-xs font-semibold text-red-600">{{ $errors->first('connect') }}</p>
         @endif
@@ -86,7 +93,7 @@
             <select id="connect-user" name="receiver_user_id" required
                 class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
                 <option value="">Select recipient</option>
-                @foreach(($connectRecipients ?? []) as $u)
+                @foreach ($connectRecipients ?? [] as $u)
                     <option value="{{ $u->id }}">
                         {{ $u->name }} ({{ $u->student_id ?: $u->email }})
                     </option>
@@ -94,19 +101,38 @@
             </select>
             <select name="college" required class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
                 <option value="">Select canteen balance</option>
-                @foreach(($canSendCoinsFrom ?? []) as $row)
-                    <option value="{{ $row['slug'] }}">{{ $row['label'] }} (₱{{ number_format($row['balance'], 2) }})</option>
+                @foreach ($canSendCoinsFrom ?? [] as $row)
+                    <option value="{{ $row['slug'] }}">{{ $row['label'] }}
+                        (₱{{ number_format($row['balance'], 2) }})</option>
                 @endforeach
             </select>
             <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount"
                 class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm" required>
             <input type="text" name="note" maxlength="300" placeholder="Note (optional)"
                 class="w-full rounded-xl border border-indigo-200 px-3 py-2 text-sm">
-            <button type="submit" class="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+            <button type="submit"
+                class="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
                 Send coins
             </button>
         </form>
     </div>
+
+    <a href="{{ route('student.refunds') }}"
+        class="group flex flex-col items-center gap-3 rounded-2xl border-2 border-green-200/90 bg-white p-1 shadow-sm ring-1 ring-green-100/80 transition hover:border-green-300 hover:shadow-md active:scale-[0.99]">
+        <span class="flex flex-col items-center rounded-xl px-4 py-6 w-full">
+            <span
+                class="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-green-400 to-emerald-500 shadow-md shadow-green-300/50 transition group-hover:shadow-lg group-hover:shadow-green-300/60">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </span>
+            <span class="text-lg font-bold tracking-tight text-green-900">My Refunds</span>
+            <span class="mt-1.5 max-w-[260px] text-center text-xs font-medium leading-snug text-green-800/75">View all
+                refunds you've received from staff.</span>
+        </span>
+    </a>
 
     <div class="grid grid-cols-2 gap-3">
         <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -135,7 +161,9 @@
                         <p class="text-sm font-semibold text-gray-800">{{ $transaction['description'] }}</p>
                         <p class="mt-1 text-xs text-gray-500">{{ $transaction['date'] }}</p>
                         @if (!empty($transaction['receipt_url']))
-                            <a href="{{ $transaction['receipt_url'] }}" class="mt-1 inline-block text-xs font-semibold text-indigo-700 underline">Open printable receipt</a>
+                            <a href="{{ $transaction['receipt_url'] }}"
+                                class="mt-1 inline-block text-xs font-semibold text-indigo-700 underline">Open
+                                printable receipt</a>
                         @endif
                     </div>
                     <p
@@ -172,15 +200,19 @@
                     @csrf
                     <input type="hidden" name="_form" value="wallet-deposit-inquiry">
                     <div>
-                        <label for="deposit-college" class="mb-1 block text-xs font-semibold text-gray-700">Canteen</label>
+                        <label for="deposit-college"
+                            class="mb-1 block text-xs font-semibold text-gray-700">Canteen</label>
                         <select id="deposit-college" name="college" required
                             class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500">
-                            <option value="" disabled {{ old('_form') === 'wallet-deposit-inquiry' && old('college') ? '' : 'selected' }}>
+                            <option value="" disabled
+                                {{ old('_form') === 'wallet-deposit-inquiry' && old('college') ? '' : 'selected' }}>
                                 Select a canteen</option>
                             @foreach ($topUpCanteens as $c)
                                 <option value="{{ $c['slug'] }}"
                                     {{ old('_form') === 'wallet-deposit-inquiry' && old('college') === $c['slug'] ? 'selected' : '' }}>
-                                    {{ $c['label'] }}@if (!empty($c['dist'])) — {{ $c['dist'] }}@endif
+                                    {{ $c['label'] }}@if (!empty($c['dist']))
+                                        — {{ $c['dist'] }}
+                                    @endif
                                 </option>
                             @endforeach
                         </select>
@@ -188,7 +220,8 @@
                     <div>
                         <label for="deposit-amount" class="mb-1 block text-xs font-semibold text-gray-700">Amount
                             (optional)</label>
-                        <input type="number" step="0.01" min="1" name="intended_amount" id="deposit-amount"
+                        <input type="number" step="0.01" min="1" name="intended_amount"
+                            id="deposit-amount"
                             value="{{ old('_form') === 'wallet-deposit-inquiry' ? old('intended_amount') : '' }}"
                             placeholder="e.g. 200"
                             class="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500">
@@ -224,6 +257,7 @@
                 var modal = document.getElementById('wallet-topup-modal');
                 var panel = document.getElementById('wallet-topup-panel');
                 var backdrop = document.getElementById('wallet-topup-backdrop');
+
                 function openTopupModal() {
                     if (!modal || !panel) return;
                     modal.classList.remove('opacity-0', 'pointer-events-none');
@@ -231,6 +265,7 @@
                     panel.classList.remove('translate-y-full', 'sm:scale-95', 'sm:opacity-0');
                     panel.classList.add('translate-y-0', 'sm:scale-100', 'sm:opacity-100');
                 }
+
                 function closeTopupModal() {
                     if (!modal || !panel) return;
                     modal.classList.add('opacity-0', 'pointer-events-none');
@@ -245,27 +280,34 @@
                     openTopupModal();
                 @endif
                 document.getElementById('btn-wallet-scroll-transactions')?.addEventListener('click', function() {
-                    document.getElementById('wallet-transactions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.getElementById('wallet-transactions')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
                 });
             })();
         </script>
         <script>
-            (function () {
+            (function() {
                 const searchInput = document.getElementById('connect-search');
                 const select = document.getElementById('connect-user');
                 const endpoint = @json(route('student.connect.search'));
                 if (!searchInput || !select || !endpoint) return;
                 let timer = null;
-                searchInput.addEventListener('input', function () {
+                searchInput.addEventListener('input', function() {
                     clearTimeout(timer);
                     const q = searchInput.value.trim();
-                    timer = setTimeout(async function () {
+                    timer = setTimeout(async function() {
                         if (q.length < 2) return;
                         try {
-                            const res = await fetch(endpoint + '?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+                            const res = await fetch(endpoint + '?q=' + encodeURIComponent(q), {
+                                headers: {
+                                    Accept: 'application/json'
+                                }
+                            });
                             const data = await res.json();
                             select.innerHTML = '<option value="">Select recipient</option>';
-                            (data.items || []).forEach(function (u) {
+                            (data.items || []).forEach(function(u) {
                                 const opt = document.createElement('option');
                                 opt.value = String(u.id);
                                 opt.textContent = u.name + ' (' + u.email + ')';
