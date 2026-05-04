@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PaymentReceipt;
 use App\Models\QrPaymentToken;
+use App\Models\SeatLayout;
 use App\Models\User;
 use App\Models\UserCanteenBalance;
 use App\Models\WalletDepositInquiry;
@@ -48,7 +49,6 @@ class StudentController extends Controller
             ->groupBy('college')
             ->pluck('occupied_count', 'college');
 
-        $totalSeats = 25;
         $canteens = [];
 
         foreach ($catalog as $college => $canteenInfo) {
@@ -57,8 +57,9 @@ class StudentController extends Controller
                 continue;
             }
 
+            $seatCapacities = SeatLayout::getLayoutForCollege($college);
             $occupied = (int) ($occupiedMap[$college] ?? 0);
-            $available = max($totalSeats - $occupied, 0);
+            $available = max($seatCapacities->sum() - $occupied, 0);
 
             $staffNames = $staffCollection->pluck('name')->filter()->values()->all();
 
@@ -71,7 +72,7 @@ class StudentController extends Controller
                 'college' => $college,
                 'dist' => $canteenInfo['dist'],
                 'rating' => CanteenFeedback::averageRatingForCollege($college),
-                'seats' => $available.'/'.$totalSeats,
+                'seats' => $available.'/'.$seatCapacities->sum(),
                 'full' => $available === 0,
                 'staff_names' => $staffLabel,
                 'staff_count' => $staffCollection->count(),
@@ -104,7 +105,8 @@ class StudentController extends Controller
             abort(404);
         }
 
-        $totalSeats = 25;
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm);
+        $totalSeats = $seatCapacities->sum();
         $occupiedCount = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->count();

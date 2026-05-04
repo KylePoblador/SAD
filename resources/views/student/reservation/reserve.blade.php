@@ -4,22 +4,25 @@
 
 @section('content')
     <div class="mb-4">
-        @include('partials.app-back-link', ['href' => route('student.canteen', ['college' => $college]), 'variant' => 'student'])
+        @include('partials.app-back-link', [
+            'href' => route('student.canteen', ['college' => $college]),
+            'variant' => 'student',
+        ])
     </div>
     <div class="text-center">
         <h1 class="text-lg font-bold text-gray-900">Select your seat</h1>
         @php
-            $totalSeats = 25;
-            $occupiedCount = count($occupied ?? []);
-            $availableCount = $totalSeats - $occupiedCount;
+            $totalSeats = $totalSeats ?? 25;
+            $occupiedCount = $occupiedCount ?? count($seatCounts ?? []);
+            $availableCount = $availableCount ?? max($totalSeats - $occupiedCount, 0);
         @endphp
 
         <div class="mt-4 flex flex-wrap justify-center gap-2">
             <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">Available:
                 {{ $availableCount }}</span>
-            <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">Occupied:
+            <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">Reserved spots:
                 {{ $occupiedCount }}</span>
-            <span class="rounded-full bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-700">Total:
+            <span class="rounded-full bg-gray-200 px-3 py-1 text-xs font-semibold text-gray-700">Total capacity:
                 {{ $totalSeats }}</span>
         </div>
 
@@ -44,14 +47,33 @@
                 data-filter="selected">Selected</button>
         </div>
 
-        <div class="mt-6 flex flex-wrap justify-center gap-2">
+        <div class="mt-6 text-xs text-gray-500">Each seat shows current reservations over capacity. Full seats cannot be
+            selected.</div>
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
             @php
-                $occupied = $occupied ?? [];
+                $seatCapacities = $seatCapacities ?? collect();
+                $seatCounts = $seatCounts ?? collect();
             @endphp
             @for ($i = 1; $i <= 25; $i++)
-                <div class="seat m-1 flex h-14 w-14 cursor-pointer items-center justify-center rounded-xl border-2 text-sm font-bold transition {{ in_array($i, $occupied) ? 'cursor-not-allowed border-red-300 bg-red-100 text-red-900' : 'border-gray-200 bg-gray-100 text-gray-800' }}"
-                    data-seat="{{ $i }}">
-                    {{ $i }}
+                @php
+                    $capacity = $seatCapacities[$i] ?? 1;
+                    $current = $seatCounts[$i] ?? 0;
+                    $isFull = $current >= $capacity;
+                    $seatClasses = $isFull
+                        ? 'cursor-not-allowed border-red-300 bg-red-100 text-red-900'
+                        : ($current > 0
+                            ? 'border-amber-300 bg-amber-100 text-amber-900'
+                            : 'border-gray-200 bg-gray-100 text-gray-800');
+                    $label = $isFull ? 'Full' : ($current > 0 ? 'Available with spots' : 'Available');
+                @endphp
+                <div class="seat m-1 flex h-16 w-16 cursor-pointer items-center justify-center rounded-xl border-2 text-sm font-bold transition {{ $seatClasses }}"
+                    data-seat="{{ $i }}" data-full="{{ $isFull ? '1' : '0' }}" data-current="{{ $current }}"
+                    data-capacity="{{ $capacity }}"
+                    title="{{ $label }} ({{ $current }}/{{ $capacity }})">
+                    <div class="flex flex-col items-center justify-center">
+                        <span>{{ $i }}</span>
+                        <span class="text-[10px] font-normal">{{ $current }}/{{ $capacity }}</span>
+                    </div>
                 </div>
             @endfor
         </div>
@@ -78,13 +100,16 @@
 
                     document.querySelectorAll('.seat').forEach(s => {
                         if (!s.classList.contains('cursor-not-allowed')) {
-                            s.classList.remove('border-green-600', 'bg-green-600', 'text-white', 'seat-picked');
-                            s.classList.add('border-gray-200', 'bg-gray-100', 'text-gray-800');
+                            s.classList.remove('border-green-600', 'bg-green-600',
+                                'text-white', 'seat-picked');
+                            s.classList.add('border-gray-200', 'bg-gray-100',
+                                'text-gray-800');
                         }
                     });
 
                     seat.classList.remove('border-gray-200', 'bg-gray-100', 'text-gray-800');
-                    seat.classList.add('border-green-600', 'bg-green-600', 'text-white', 'seat-picked');
+                    seat.classList.add('border-green-600', 'bg-green-600', 'text-white',
+                        'seat-picked');
                     selected = seat.dataset.seat;
                     document.getElementById('seatInput').value = selected;
                 });
@@ -95,13 +120,16 @@
                     const filter = btn.dataset.filter;
                     document.querySelectorAll('.seat').forEach(seat => {
                         seat.style.display = 'flex';
-                        if (filter === 'available' && seat.classList.contains('cursor-not-allowed')) {
+                        if (filter === 'available' && seat.classList.contains(
+                                'cursor-not-allowed')) {
                             seat.style.display = 'none';
                         }
-                        if (filter === 'occupied' && !seat.classList.contains('cursor-not-allowed')) {
+                        if (filter === 'occupied' && !seat.classList.contains(
+                                'cursor-not-allowed')) {
                             seat.style.display = 'none';
                         }
-                        if (filter === 'selected' && !seat.classList.contains('seat-picked')) {
+                        if (filter === 'selected' && !seat.classList.contains(
+                                'seat-picked')) {
                             seat.style.display = 'none';
                         }
                     });

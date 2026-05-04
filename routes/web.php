@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StudentController;
 use App\Models\ActivityNotification;
+use App\Models\SeatLayout;
 use App\Models\UserCanteenBalance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -237,6 +238,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/seats', [DashboardController::class, 'seats'])->name('staff.seats');
     Route::post('/staff/seats/release', [DashboardController::class, 'releaseSeat'])->name('staff.seats.release');
     Route::post('/staff/seats/release-all', [DashboardController::class, 'releaseAllSeats'])->name('staff.seats.release-all');
+    Route::post('/staff/seats/capacity', [DashboardController::class, 'updateSeatCapacities'])->name('staff.seats.capacity');
 
     Route::get('/staff/feedbacks', [DashboardController::class, 'feedbacks'])->name('staff.feedbacks');
     Route::post('/staff/feedbacks/{feedback}/reply', [DashboardController::class, 'replyFeedback'])->name('staff.feedbacks.reply');
@@ -269,14 +271,27 @@ Route::middleware('auth')->group(function () {
             abort(404);
         }
 
-        $occupied = DB::table('seat_reservations')
+        $seatCount = 25;
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm, $seatCount);
+        $seatCounts = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-            ->pluck('seat_number')
+            ->select('seat_number', DB::raw('COUNT(*) as count'))
+            ->groupBy('seat_number')
+            ->pluck('count', 'seat_number');
+
+        $fullSeats = collect(range(1, $seatCount))
+            ->filter(fn ($seatNumber) => ($seatCounts[$seatNumber] ?? 0) >= ($seatCapacities[$seatNumber] ?? 1))
+            ->values()
             ->all();
 
         return view('student.reservation.reserve', [
             'college' => $collegeNorm,
-            'occupied' => $occupied,
+            'occupied' => $fullSeats,
+            'seatCapacities' => $seatCapacities,
+            'seatCounts' => $seatCounts,
+            'totalSeats' => $seatCapacities->sum(),
+            'occupiedCount' => $seatCounts->sum(),
+            'availableCount' => max($seatCapacities->sum() - $seatCounts->sum(), 0),
         ]);
     })->name('student.reserve');
 
@@ -296,14 +311,15 @@ Route::middleware('auth')->group(function () {
             abort(404);
         }
 
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm);
         $alreadyTaken = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
             ->where('seat_number', $validated['seat'])
             ->where('user_id', '!=', $request->user()->id)
-            ->exists();
+            ->count();
 
-        if ($alreadyTaken) {
-            return back()->with('error', 'Seat is already reserved. Please choose another seat.');
+        if ($alreadyTaken >= ($seatCapacities[$validated['seat']] ?? 1)) {
+            return back()->with('error', 'Seat is full. Please choose another seat.');
         }
 
         DB::transaction(function () use ($request, $collegeNorm, $validated) {

@@ -8,6 +8,7 @@ use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\PaymentReceipt;
 use App\Models\QrPaymentToken;
+use App\Models\SeatLayout;
 use App\Models\UserCanteenBalance;
 use App\Models\WalletDepositInquiry;
 use App\Models\WalletLoadLog;
@@ -15,8 +16,10 @@ use App\Services\InAppNotificationFeed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -36,7 +39,8 @@ class DashboardController extends Controller
         $catalog = config('canteens', []);
         $staffCollegeName = $catalog[$collegeCode]['label'] ?? 'Assigned canteen';
 
-        $totalSeats = 25;
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeCode);
+        $totalSeats = $seatCapacities->sum();
         $occupiedCount = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
             ->count();
@@ -569,36 +573,89 @@ class DashboardController extends Controller
     public function seats()
     {
         $collegeCode = $this->staffCollegeCode();
-        $totalSeats = 25;
+        $seatCount = 25;
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeCode, $seatCount);
 
         $reservedSeats = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(seat_reservations.college)) = ?', [$collegeCode])
             ->join('users', 'seat_reservations.user_id', '=', 'users.id')
-            ->select('seat_reservations.seat_number', 'users.name as student_name', 'seat_reservations.user_id')
+            ->select('seat_reservations.seat_number', 'users.name as student_name')
             ->get()
-            ->keyBy('seat_number');
+            ->groupBy('seat_number')
+            ->map(fn ($group) => $group->first());
 
-        $seats = collect(range(1, $totalSeats))->map(function ($seatNumber) use ($reservedSeats) {
-            $reservation = $reservedSeats->get($seatNumber);
+        $seatCounts = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
+            ->select('seat_number', DB::raw('COUNT(*) as count'))
+            ->groupBy('seat_number')
+            ->pluck('count', 'seat_number');
+
+        $totalReservations = $seatCounts->sum();
+        $totalCapacity = $seatCapacities->sum();
+
+        $seats = collect(range(1, $seatCount))->map(function ($seatNumber) use ($reservedSeats, $seatCounts, $seatCapacities) {
+            $current = (int) ($seatCounts[$seatNumber] ?? 0);
+            $capacity = (int) ($seatCapacities[$seatNumber] ?? 1);
+            $status = $current === 0
+                ? 'available'
+                : ($current < $capacity ? 'partially-occupied' : 'occupied');
 
             return [
                 'number' => $seatNumber,
-                'status' => $reservation ? 'occupied' : 'available',
-                'student' => $reservation->student_name ?? null,
+                'status' => $status,
+                'student' => $reservedSeats[$seatNumber]->student_name ?? null,
+                'current' => $current,
+                'capacity' => $capacity,
             ];
         });
 
         $rows = $seats->chunk(5)->values();
 
         return view('Staff.quickaction.seats', [
-            'totalSeats' => $totalSeats,
-            'availableSeats' => $seats->where('status', 'available')->count(),
-            'occupiedSeats' => $seats->where('status', 'occupied')->count(),
+            'totalSeats' => $totalCapacity,
+            'availableSeats' => max($totalCapacity - $totalReservations, 0),
+            'occupiedSeats' => $totalReservations,
             'seats' => $seats,
             'seatRows' => $rows,
             'canteenName' => config('canteens')[$collegeCode]['label'] ?? $collegeCode,
             'collegeCode' => $collegeCode,
+            'seatCapacities' => $seatCapacities,
         ]);
+    }
+
+    public function updateSeatCapacities(Request $request)
+    {
+        $collegeCode = $this->staffCollegeCode();
+        $seatCount = 25;
+
+        if (! Schema::hasTable('seat_layouts')) {
+            Schema::create('seat_layouts', function (Blueprint $table) {
+                $table->id();
+                $table->string('college');
+                $table->unsignedTinyInteger('seat_number');
+                $table->unsignedTinyInteger('capacity')->default(1);
+                $table->timestamps();
+                $table->unique(['college', 'seat_number']);
+            });
+        }
+
+        $validated = $request->validate([
+            'capacity' => ['required', 'array'],
+            'capacity.*' => ['required', 'integer', 'between:1,10'],
+        ]);
+
+        foreach (range(1, $seatCount) as $seatNumber) {
+            $capacityValue = (int) ($validated['capacity'][$seatNumber] ?? 1);
+            SeatLayout::updateOrCreate([
+                'college' => $collegeCode,
+                'seat_number' => $seatNumber,
+            ], [
+                'capacity' => $capacityValue,
+            ]);
+        }
+
+        return redirect()->route('staff.seats')
+            ->with('status', 'seat-capacities-saved');
     }
 
     public function releaseSeat(Request $request)
@@ -609,13 +666,13 @@ class DashboardController extends Controller
             'seat_number' => ['required', 'integer', 'between:1,25'],
         ]);
 
-        $reservation = DB::table('seat_reservations')
+        $reservations = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
             ->where('seat_number', $validated['seat_number'])
-            ->first();
+            ->get();
 
-        if ($reservation) {
-            $label = config('canteens')[$collegeCode]['label'] ?? $collegeCode;
+        $label = config('canteens')[$collegeCode]['label'] ?? $collegeCode;
+        foreach ($reservations as $reservation) {
             ActivityNotification::notifyUser(
                 (int) $reservation->user_id,
                 ActivityNotification::TYPE_SEAT_RELEASED,
