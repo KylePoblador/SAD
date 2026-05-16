@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RefundController;
 use App\Http\Controllers\StudentController;
+use App\Http\Controllers\StudentFriendController;
 use App\Models\ActivityNotification;
 use App\Models\SeatLayout;
 use App\Models\UserCanteenBalance;
@@ -167,15 +168,38 @@ Route::post('/student/wallet/update/{studentId}', [StudentController::class, 'up
     ->middleware(['auth', 'verified'])
     ->name('student.wallet.update');
 
-Route::post('/student/wallet/deposit-inquiry', [StudentController::class, 'storeWalletDepositInquiry'])
+Route::post('/student/wallet/load-qr', [StudentController::class, 'generateWalletLoadQr'])
     ->middleware(['auth', 'verified'])
-    ->name('student.wallet.deposit-inquiry');
+    ->name('student.wallet.load-qr.generate');
+Route::get('/student/wallet/load-qr/{token}', [StudentController::class, 'showWalletLoadQr'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.wallet.load-qr.show');
+
 Route::get('/student/connect/search', [StudentController::class, 'connectSearch'])
     ->middleware(['auth', 'verified'])
     ->name('student.connect.search');
 Route::post('/student/connect/send', [StudentController::class, 'sendCoins'])
     ->middleware(['auth', 'verified'])
     ->name('student.connect.send');
+
+Route::get('/student/friends', [StudentFriendController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.friends.index');
+Route::get('/student/friends/search', [StudentFriendController::class, 'search'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.friends.search');
+Route::post('/student/friends/add', [StudentFriendController::class, 'add'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.friends.add');
+Route::post('/student/friends/{friendship}/accept', [StudentFriendController::class, 'accept'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.friends.accept');
+Route::delete('/student/friends/{friendship}/reject', [StudentFriendController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.friends.reject');
+Route::delete('/student/friends/{friend}/remove', [StudentFriendController::class, 'removeFriend'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.friends.remove');
 
 Route::get('/student/notification', [StudentController::class, 'notifications'])
     ->middleware(['auth', 'verified'])
@@ -245,7 +269,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/staff/orders', [DashboardController::class, 'orders'])->name('staff.orders');
     Route::get('/staff/qr-scanner', [DashboardController::class, 'qrScanner'])->name('staff.qr.scanner');
+    Route::get('/staff/wallet-load/{token}', [DashboardController::class, 'walletLoadQrConfirm'])->name('staff.wallet-load.confirm');
+    Route::post('/staff/wallet-load/{token}/consume', [DashboardController::class, 'walletLoadQrConsume'])->name('staff.wallet-load.consume');
     Route::get('/staff/qr/{token}', [DashboardController::class, 'qrConfirm'])->name('staff.qr.confirm');
+
     Route::post('/staff/qr/{token}/consume', [DashboardController::class, 'qrConsume'])->name('staff.qr.consume');
     Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
     Route::patch('/staff/orders/{order}/status', [DashboardController::class, 'updateOrderStatus'])->name('staff.orders.status');
@@ -281,9 +308,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
     Route::get('/staff/reports/print', [DashboardController::class, 'reportsPrint'])->name('staff.reports.print');
 
-    Route::patch('/staff/deposit-inquiries/{walletDepositInquiry}/done', [DashboardController::class, 'completeDepositInquiry'])
-        ->name('staff.deposit-inquiry.done');
-
     /*
     |--------------------------------------------------------------------------
     | STUDENT CANTEEN ROUTES
@@ -292,6 +316,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/student/canteen/{college}', [StudentController::class, 'showCanteen'])
         ->name('student.canteen');
+    Route::post('/student/canteen/{college}/mode', [StudentController::class, 'setOrderMode'])
+        ->name('student.canteen.mode');
 
     Route::get('/student/cart', [StudentController::class, 'cartHub'])->name('student.cart.hub');
     Route::get('/student/cart/{college}', [StudentController::class, 'showCart'])->name('student.cart');
@@ -300,92 +326,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/student/cart/{college}/remove', [StudentController::class, 'cartRemoveItem'])->name('student.cart.remove');
     Route::post('/student/cart/{college}/checkout', [StudentController::class, 'cartCheckout'])->name('student.cart.checkout');
 
-    Route::get('/student/reserve/{college}', function ($college) {
-        $collegeNorm = UserCanteenBalance::normalizedCollege((string) $college);
-        if (! array_key_exists($collegeNorm, config('canteens', []))) {
-            abort(404);
-        }
-
-        $seatCount = 25;
-        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm, $seatCount);
-        $seatCounts = DB::table('seat_reservations')
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-            ->select('seat_number', DB::raw('COUNT(*) as count'))
-            ->groupBy('seat_number')
-            ->pluck('count', 'seat_number');
-
-        $fullSeats = collect(range(1, $seatCount))
-            ->filter(fn ($seatNumber) => ($seatCounts[$seatNumber] ?? 0) >= ($seatCapacities[$seatNumber] ?? 1))
-            ->values()
-            ->all();
-
-        return view('student.reservation.reserve', [
-            'college' => $collegeNorm,
-            'occupied' => $fullSeats,
-            'seatCapacities' => $seatCapacities,
-            'seatCounts' => $seatCounts,
-            'totalSeats' => $seatCapacities->sum(),
-            'occupiedCount' => $seatCounts->sum(),
-            'availableCount' => max($seatCapacities->sum() - $seatCounts->sum(), 0),
-        ]);
-    })->name('student.reserve');
-
-    Route::post('/student/confirm-seat', function (Request $request) {
-        $canteenKeys = array_keys(config('canteens', []));
-        $request->merge([
-            'college' => UserCanteenBalance::normalizedCollege((string) $request->input('college', '')),
-        ]);
-
-        $validated = $request->validate([
-            'college' => ['required', 'string', Rule::in($canteenKeys)],
-            'seat' => ['required', 'integer', 'between:1,25'],
-        ]);
-
-        $collegeNorm = UserCanteenBalance::normalizedCollege((string) $validated['college']);
-        if (! array_key_exists($collegeNorm, config('canteens', []))) {
-            abort(404);
-        }
-
-        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm);
-        $alreadyTaken = DB::table('seat_reservations')
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-            ->where('seat_number', $validated['seat'])
-            ->where('user_id', '!=', $request->user()->id)
-            ->count();
-
-        if ($alreadyTaken >= ($seatCapacities[$validated['seat']] ?? 1)) {
-            return back()->with('error', 'Seat is full. Please choose another seat.');
-        }
-
-        DB::transaction(function () use ($request, $collegeNorm, $validated) {
-            DB::table('seat_reservations')
-                ->where('user_id', $request->user()->id)
-                ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-                ->delete();
-
-            DB::table('seat_reservations')->insert([
-                'user_id' => $request->user()->id,
-                'college' => $collegeNorm,
-                'seat_number' => $validated['seat'],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        });
-
-        $canteenLabel = config('canteens')[$collegeNorm]['label'] ?? $collegeNorm;
-        ActivityNotification::notifyUser(
-            $request->user()->id,
-            ActivityNotification::TYPE_SEAT_RESERVED,
-            'Seat reserved',
-            'Seat #'.$validated['seat'].' at '.$canteenLabel.'.',
-            null
-        );
-
-        return redirect()
-            ->route('student.canteen', ['college' => $collegeNorm])
-            ->with('seat', $validated['seat']);
-
-    })->name('student.confirm.seat');
+    Route::get('/student/reserve/{college}', [StudentController::class, 'reserveSeatForm'])->name('student.reserve');
+    Route::post('/student/confirm-seat', [StudentController::class, 'reserveSeatConfirm'])->name('student.confirm-seat');
 });
 
 require __DIR__.'/auth.php';

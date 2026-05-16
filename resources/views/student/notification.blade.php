@@ -2,19 +2,11 @@
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center justify-between gap-2 sm:justify-start">
             <h2 class="text-base font-bold text-gray-800">Notifications</h2>
-            <div class="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 sm:hidden">
-                <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600"></span>
-                Live
-            </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <div class="hidden items-center gap-2 rounded-lg bg-blue-50 px-2 py-1 text-xs font-medium text-blue-800 sm:inline-flex">
-                <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600"></span>
-                Live
-            </div>
             <button type="button" id="student-notif-mark-all"
                 class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">
-                Mark all as done
+                Mark all as read
             </button>
             <button type="button" id="student-notif-clear-all"
                 class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100">
@@ -107,7 +99,6 @@
                         </div>
                         <div class="text-xs text-gray-500">${notification.time}</div>
                         <div class="mt-1 text-sm text-gray-600">${notification.message}</div>
-                        <span class="mt-2 inline-block rounded px-2 py-0.5 text-[11px] font-bold ${badgeClass(notification.status)}">${statusLabel}</span>
                     </div>`;
 
                 if (isEmpty) {
@@ -196,9 +187,14 @@
             });
 
             document.getElementById('student-notif-clear-all')?.addEventListener('click', async function() {
-                if (!confirm('Clear all notifications from this list? New activity will still appear here.')) {
-                    return;
-                }
+                const ok = await CoinmealDialog.confirm({
+                    title: 'Clear all notifications?',
+                    message: 'Clear all notifications from this list? New activity will still appear here.',
+                    variant: 'danger',
+                    confirmLabel: 'Clear all',
+                    cancelLabel: 'Cancel',
+                });
+                if (!ok) return;
                 try {
                     const data = await postNotificationAction(clearAllUrl);
                     if (data.notifications) {

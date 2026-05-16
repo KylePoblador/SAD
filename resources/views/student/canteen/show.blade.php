@@ -30,8 +30,8 @@
                 <strong class="text-white">Wallet</strong> shows your total everywhere.
             </p>
             <div class="mt-4 rounded-xl bg-black/15 px-4 py-3 text-xs leading-relaxed backdrop-blur-sm">
-                <p><strong class="text-white">Notify canteen</strong> doesn’t add money until staff <strong
-                        class="text-white">confirm load</strong> after you pay cash.</p>
+                <p><strong class="text-white">Pay cash first</strong>, then show staff your <strong class="text-white">wallet QR</strong>
+                    from Load wallet — they scan it (same QR scanner as orders) and your balance updates.</p>
                 <p class="mt-2">Top up: <strong class="text-white">Wallet</strong> → <strong class="text-white">Load
                         wallet</strong> → choose <strong class="text-white">{{ $canteenName }}</strong>.</p>
                 <a href="{{ route('student.wallet') }}"
@@ -251,7 +251,12 @@
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) {
-                        alert(data.message || "Could not add to cart.");
+                        await CoinmealDialog.alert({
+                            title: 'Could not add to cart',
+                            message: data.message || 'Something went wrong. Please try again.',
+                            variant: 'error',
+                            okLabel: 'OK',
+                        });
                         return;
                     }
                     if (typeof data.cart_count === "number") {
@@ -264,7 +269,12 @@
                         btn.textContent = label;
                     }, 1200);
                 } catch (e) {
-                    alert("Network error. Try again.");
+                    await CoinmealDialog.alert({
+                        title: 'Network error',
+                        message: 'Could not reach the server. Check your connection and try again.',
+                        variant: 'error',
+                        okLabel: 'OK',
+                    });
                 } finally {
                     btn.disabled = false;
                 }

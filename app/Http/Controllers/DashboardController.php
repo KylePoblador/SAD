@@ -10,8 +10,8 @@ use App\Models\PaymentReceipt;
 use App\Models\QrPaymentToken;
 use App\Models\SeatLayout;
 use App\Models\UserCanteenBalance;
-use App\Models\WalletDepositInquiry;
 use App\Models\WalletLoadLog;
+use App\Models\WalletLoadQrToken;
 use App\Services\InAppNotificationFeed;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -77,44 +77,6 @@ class DashboardController extends Controller
             'rating' => CanteenFeedback::averageRatingForCollege($collegeCode),
             'recentOrders' => $recentOrders,
         ]);
-    }
-
-    public function completeDepositInquiry(WalletDepositInquiry $walletDepositInquiry)
-    {
-        $user = Auth::user();
-
-        if ($user->role !== 'staff') {
-            abort(403);
-        }
-
-        $collegeCode = $user->college ? strtolower(trim((string) $user->college)) : 'ceit';
-        $inquiryCollege = strtolower(trim((string) $walletDepositInquiry->college));
-
-        if ($inquiryCollege !== $collegeCode) {
-            abort(403);
-        }
-
-        if ($walletDepositInquiry->status !== 'pending') {
-            return redirect()
-                ->route('staff.wallet')
-                ->with('status', 'deposit-inquiry-already-done');
-        }
-
-        $walletDepositInquiry->update(['status' => 'done']);
-
-        $canteenLabel = config('canteens')[$inquiryCollege]['label'] ?? $walletDepositInquiry->college;
-
-        ActivityNotification::notifyUser(
-            $walletDepositInquiry->user_id,
-            ActivityNotification::TYPE_DEPOSIT_INQUIRY_DONE,
-            'Deposit inquiry completed',
-            'Staff marked your top-up request for '.$canteenLabel.' as done.',
-            $walletDepositInquiry->id
-        );
-
-        return redirect()
-            ->route('staff.wallet')
-            ->with('status', 'deposit-inquiry-completed');
     }
 
     public function qrScanner()
@@ -185,6 +147,108 @@ class DashboardController extends Controller
         });
 
         return redirect()->route('staff.qr.scanner')->with('status', 'Order payment verified and completed.');
+    }
+
+    public function walletLoadQrConfirm(string $token)
+    {
+        if (strtolower(trim((string) (Auth::user()->role ?? ''))) !== 'staff') {
+            abort(403);
+        }
+        if (! Schema::hasTable('wallet_load_qr_tokens')) {
+            abort(503, 'Wallet QR feature is not ready. Run migrations.');
+        }
+
+        $staffCollege = $this->staffCollegeCode();
+        $entry = WalletLoadQrToken::query()
+            ->where('token', $token)
+            ->with('user')
+            ->firstOrFail();
+
+        $entryCollege = UserCanteenBalance::normalizedCollege((string) $entry->college);
+        if ($entryCollege !== $staffCollege) {
+            abort(403);
+        }
+
+        if ($entry->consumed_at !== null) {
+            return redirect()->route('staff.qr.scanner')->with('status', 'Wallet QR already used.');
+        }
+        if ($entry->expires_at->isPast()) {
+            return redirect()->route('staff.qr.scanner')->with('error', 'Wallet QR expired.');
+        }
+
+        $canteenLabel = config('canteens')[$staffCollege]['label'] ?? strtoupper($staffCollege);
+
+        return view('Staff.quickaction.wallet-load-confirm', [
+            'entry' => $entry,
+            'student' => $entry->user,
+            'canteenLabel' => $canteenLabel,
+        ]);
+    }
+
+    public function walletLoadQrConsume(Request $request, string $token)
+    {
+        if (strtolower(trim((string) (Auth::user()->role ?? ''))) !== 'staff') {
+            abort(403);
+        }
+        if (! Schema::hasTable('wallet_load_qr_tokens')) {
+            abort(503, 'Wallet QR feature is not ready. Run migrations.');
+        }
+
+        $staffCollege = $this->staffCollegeCode();
+        $staff = Auth::user();
+
+        $entry = WalletLoadQrToken::query()
+            ->where('token', $token)
+            ->with('user')
+            ->firstOrFail();
+
+        $entryCollege = UserCanteenBalance::normalizedCollege((string) $entry->college);
+        if ($entryCollege !== $staffCollege) {
+            abort(403);
+        }
+
+        if ($entry->consumed_at !== null) {
+            return redirect()->route('staff.qr.scanner')->with('status', 'Wallet QR already used.');
+        }
+        if ($entry->expires_at->isPast()) {
+            return redirect()->route('staff.qr.scanner')->with('error', 'Wallet QR expired.');
+        }
+
+        $student = $entry->user;
+        if (! $student) {
+            abort(404);
+        }
+
+        $amount = (float) $entry->amount;
+
+        DB::transaction(function () use ($entry, $staffCollege, $amount, $student, $staff) {
+            $entry->update([
+                'consumed_at' => now(),
+                'consumed_by_user_id' => $staff->id,
+            ]);
+
+            $newCanteenBalance = UserCanteenBalance::add((int) $student->id, $staffCollege, $amount);
+
+            WalletLoadLog::query()->create([
+                'student_user_id' => $student->id,
+                'staff_user_id' => $staff->id,
+                'college' => $staffCollege,
+                'amount' => $amount,
+            ]);
+
+            $canteenLabel = config('canteens')[$staffCollege]['label'] ?? $staffCollege;
+            $totalBalance = UserCanteenBalance::totalForUser((int) $student->id);
+
+            ActivityNotification::notifyUser(
+                (int) $student->id,
+                ActivityNotification::TYPE_WALLET_LOADED,
+                'Wallet loaded',
+                $staff->name.' confirmed ₱'.number_format($amount, 2).' to your '.$canteenLabel.' wallet. '.$canteenLabel.': ₱'.number_format($newCanteenBalance, 2).' · Total: ₱'.number_format($totalBalance, 2).'.',
+                null
+            );
+        });
+
+        return redirect()->route('staff.qr.scanner')->with('status', 'Wallet load verified and completed.');
     }
 
     public function profile()
@@ -490,13 +554,6 @@ class DashboardController extends Controller
 
         $canteenName = config('canteens')[$collegeCode]['label'] ?? 'Canteen';
 
-        $depositInquiries = WalletDepositInquiry::query()
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
-            ->where('status', 'pending')
-            ->with('user')
-            ->latest()
-            ->get();
-
         $walletLoadHistory = WalletLoadLog::query()
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
             ->with(['student:id,name,email,student_id', 'staffMember:id,name'])
@@ -504,68 +561,9 @@ class DashboardController extends Controller
             ->take(100)
             ->get();
 
-        $pendingUserIds = WalletDepositInquiry::query()
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
-            ->where('status', 'pending')
-            ->pluck('user_id')
-            ->unique();
-
-        $lastDoneByUser = WalletDepositInquiry::query()
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
-            ->where('status', 'done')
-            ->selectRaw('user_id, MAX(updated_at) as last_done')
-            ->groupBy('user_id')
-            ->pluck('last_done', 'user_id');
-
-        $inquiryUserIds = WalletDepositInquiry::query()
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
-            ->distinct()
-            ->pluck('user_id');
-
-        $collegeStudentIds = DB::table('users')
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeCode])
-            ->where('role', 'student')
-            ->pluck('id');
-
-        $allIds = $collegeStudentIds->merge($inquiryUserIds)->unique()->sort()->values();
-
-        $students = collect();
-        foreach ($allIds as $userId) {
-            $row = DB::table('users')
-                ->where('id', $userId)
-                ->where('role', 'student')
-                ->select('id', 'name', 'email', 'college', 'student_id')
-                ->first();
-            if (! $row) {
-                continue;
-            }
-
-            $assignedToCanteen = strtolower(trim((string) ($row->college ?? ''))) === $collegeCode;
-            $hasPending = $pendingUserIds->contains($userId);
-            $lastDone = $lastDoneByUser->get($userId);
-            $inquiryHistoryOnly = ! $assignedToCanteen && ! $hasPending && $lastDone !== null;
-
-            $students->push((object) [
-                'id' => $row->id,
-                'name' => $row->name,
-                'email' => $row->email,
-                'college' => $row->college,
-                'student_id' => $row->student_id,
-                'assigned_to_canteen' => $assignedToCanteen,
-                'has_pending_inquiry' => $hasPending,
-                'last_completed_inquiry_at' => $lastDone,
-                'inquiry_history_only' => $inquiryHistoryOnly,
-                'can_load_wallet' => $assignedToCanteen || $hasPending,
-            ]);
-        }
-
-        $students = $students->sortBy(fn ($s) => strtolower($s->name))->values();
-
         return view('Staff.quickaction.wallet', [
             'canteenName' => $canteenName,
             'collegeCode' => strtoupper($collegeCode),
-            'students' => $students,
-            'depositInquiries' => $depositInquiries,
             'walletLoadHistory' => $walletLoadHistory,
         ]);
     }

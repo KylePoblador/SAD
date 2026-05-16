@@ -19,6 +19,12 @@ class ActivityNotification extends Model
 
     public const TYPE_SEAT_RELEASED = 'seat_released';
 
+    public const TYPE_FRIEND_REQUEST = 'friend_request';
+
+    public const TYPE_FRIEND_ACCEPTED = 'friend_accepted';
+
+    public const TYPE_WALLET_TRANSFER = 'wallet_transfer';
+
     protected $fillable = [
         'user_id',
         'type',
@@ -45,9 +51,12 @@ class ActivityNotification extends Model
         return match ($this->type) {
             self::TYPE_WALLET_LOADED,
             self::TYPE_DEPOSIT_INQUIRY_DONE,
-            self::TYPE_SEAT_RESERVED => 'completed',
+            self::TYPE_SEAT_RESERVED,
+            self::TYPE_FRIEND_ACCEPTED,
+            self::TYPE_WALLET_TRANSFER => 'completed',
             self::TYPE_SEAT_RELEASED => 'ready',
-            self::TYPE_DEPOSIT_INQUIRY_STUDENT => 'preparing',
+            self::TYPE_DEPOSIT_INQUIRY_STUDENT,
+            self::TYPE_FRIEND_REQUEST => 'preparing',
             self::TYPE_DEPOSIT_INQUIRY_STAFF => 'pending',
             default => 'info',
         };
@@ -59,9 +68,12 @@ class ActivityNotification extends Model
             self::TYPE_WALLET_LOADED,
             self::TYPE_DEPOSIT_INQUIRY_STUDENT,
             self::TYPE_DEPOSIT_INQUIRY_STAFF,
+            self::TYPE_WALLET_TRANSFER,
             self::TYPE_DEPOSIT_INQUIRY_DONE => 'wallet',
             self::TYPE_SEAT_RESERVED,
             self::TYPE_SEAT_RELEASED => 'seat',
+            self::TYPE_FRIEND_REQUEST,
+            self::TYPE_FRIEND_ACCEPTED => 'users',
             default => 'bell',
         };
     }

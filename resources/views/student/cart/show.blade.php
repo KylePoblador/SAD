@@ -105,23 +105,28 @@
 
                 <form action="{{ route('student.cart.checkout', $college) }}" method="post" class="mt-4">
                     @csrf
-                    <div class="mb-3 grid grid-cols-2 gap-2 rounded-xl border border-gray-100 bg-gray-50 p-2">
-                        <label class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800">
-                            <input type="radio" name="order_mode" value="dine_in" {{ $hasReservedSeat ? 'checked' : '' }}>
-                            Dine-in
-                        </label>
-                        <label class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800">
-                            <input type="radio" name="order_mode" value="takeout" {{ $hasReservedSeat ? '' : 'checked' }}>
-                            Takeout
-                        </label>
+                    
+                    <div class="mb-3 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 p-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">{{ $orderMode === 'dine_in' ? '🍽️' : '🛍️' }}</span>
+                            <div>
+                                <p class="text-xs text-gray-500">Order Mode</p>
+                                <p class="text-sm font-bold text-gray-800">{{ $orderMode === 'dine_in' ? 'Dine-in' : 'Takeout' }}</p>
+                            </div>
+                        </div>
+                        <a href="{{ route('student.canteen.mode', ['college' => $college]) }}" onclick="event.preventDefault(); document.getElementById('change-mode-form').submit();" class="text-xs font-semibold text-green-600 underline hover:text-green-700">Change</a>
                     </div>
+
                     <input type="text" name="coupon_code" placeholder="Coupon code (optional)"
                         class="mb-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
                     <button type="submit"
                         class="min-h-[48px] w-full touch-manipulation rounded-xl bg-green-600 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                         @disabled($walletBalance + 0.001 < $subtotal)>
-                        Place order
+                        {{ $orderMode === 'dine_in' ? 'Select Seat & Checkout' : 'Place Order' }}
                     </button>
+                </form>
+                <form id="change-mode-form" action="{{ route('student.canteen', $college) }}" method="get" class="hidden">
+                    <input type="hidden" name="change_mode" value="1">
                 </form>
                 <p class="mt-2 text-center text-[11px] text-gray-400">This checkout creates <strong>one order</strong> for
                     <strong>{{ $canteenName }}</strong> only. Other canteens’ carts are unchanged and get their own order and receipt when you check out there.</p>

@@ -12,6 +12,8 @@
 <body
     class="min-h-screen bg-gradient-to-b from-emerald-50/90 via-white to-sky-50/40 pb-24 font-sans text-gray-900 antialiased">
 
+    @include('partials.coinmeal-dialogs')
+
     <header class="sticky top-0 z-10 border-b border-emerald-100/80 bg-white/90 shadow-sm backdrop-blur-sm">
         <div class="coinmeal-container flex items-center gap-3 py-3">
             <a href="{{ url('/staff/dashboard') }}"
@@ -190,7 +192,12 @@
 
             const studentId = document.getElementById('student_user_id').value;
             if (!studentId) {
-                alert('Please select a student');
+                await CoinmealDialog.alert({
+                    title: 'Select a student',
+                    message: 'Search and choose a student before issuing a refund.',
+                    variant: 'info',
+                    okLabel: 'OK',
+                });
                 return;
             }
 
@@ -213,16 +220,31 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert(`✅ Refund processed!\nStudent new balance: ₱${data.student_new_balance}`);
+                    await CoinmealDialog.alert({
+                        title: 'Refund processed',
+                        message: `Student’s new wallet balance: ₱${Number(data.student_new_balance ?? 0).toFixed(2)}`,
+                        variant: 'success',
+                        okLabel: 'Done',
+                    });
                     document.getElementById('refund-form').reset();
                     document.getElementById('selected-student').textContent = '';
                     loadRefundHistory();
                 } else {
-                    alert(`❌ Error: ${data.message}`);
+                    await CoinmealDialog.alert({
+                        title: 'Refund failed',
+                        message: data.message || 'The refund could not be completed.',
+                        variant: 'error',
+                        okLabel: 'OK',
+                    });
                 }
             } catch (error) {
                 console.error('Error submitting refund:', error);
-                alert('Error processing refund');
+                await CoinmealDialog.alert({
+                    title: 'Error',
+                    message: 'Something went wrong while processing the refund. Please try again.',
+                    variant: 'error',
+                    okLabel: 'OK',
+                });
             }
         });
 

@@ -2,7 +2,7 @@
     <div class="mb-4 flex flex-wrap gap-2">
         <button type="button" id="staff-notif-mark-all"
             class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50">
-            Mark all as done
+            Mark all as read
         </button>
         <button type="button" id="staff-notif-clear-all"
             class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 transition hover:bg-rose-100">
@@ -172,9 +172,14 @@
         });
 
         document.getElementById('staff-notif-clear-all')?.addEventListener('click', async function() {
-            if (!confirm('Clear all notifications from this list? New activity will still appear here.')) {
-                return;
-            }
+            const ok = await CoinmealDialog.confirm({
+                title: 'Clear all notifications?',
+                message: 'Clear all notifications from this list? New activity will still appear here.',
+                variant: 'danger',
+                confirmLabel: 'Clear all',
+                cancelLabel: 'Cancel',
+            });
+            if (!ok) return;
             try {
                 const data = await postStaffNotificationAction(clearAllUrl);
                 if (data.notifications) {

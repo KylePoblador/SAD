@@ -48,7 +48,11 @@
 
     <div class="grid gap-3 sm:grid-cols-2">
         <form method="post" action="{{ route('staff.seats.release-all') }}"
-            onsubmit="return confirm('Release ALL occupied seats? Every student will lose their seat assignment for this canteen.');">
+            data-coinmeal-confirm-title="Release all occupied seats?"
+            data-coinmeal-confirm="Every student will lose their seat assignment for this canteen."
+            data-coinmeal-confirm-variant="danger"
+            data-coinmeal-confirm-ok="Yes, release all"
+            data-coinmeal-confirm-cancel="Cancel">
             @csrf
             <input type="hidden" name="scope" value="all_occupied">
             <button type="submit"
@@ -57,7 +61,11 @@
             </button>
         </form>
         <form method="post" action="{{ route('staff.seats.release-all') }}"
-            onsubmit="return confirm('Cancel ALL seat reservations? Same as clearing occupied — all students lose their reserved seat here.');">
+            data-coinmeal-confirm-title="Clear all reservations?"
+            data-coinmeal-confirm="Same as clearing occupied — every student loses their reserved seat for this canteen."
+            data-coinmeal-confirm-variant="danger"
+            data-coinmeal-confirm-ok="Yes, clear all"
+            data-coinmeal-confirm-cancel="Cancel">
             @csrf
             <input type="hidden" name="scope" value="all_reserved">
             <button type="submit"

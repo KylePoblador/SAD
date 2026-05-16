@@ -81,8 +81,10 @@
                         {{ $item->is_available ? 'Mark unavailable' : 'Mark available' }}
                     </button>
                 </form>
-                <form method="POST" action="{{ route('staff.menu.destroy', $item) }}"
-                    onsubmit="return confirm('Remove this item?');">
+                <form method="POST" action="{{ route('staff.menu.destroy', $item) }}" data-coinmeal-confirm-title="Remove menu item?"
+                    data-coinmeal-confirm="Remove this item from your canteen menu? Students will no longer see it."
+                    data-coinmeal-confirm-variant="danger" data-coinmeal-confirm-ok="Remove"
+                    data-coinmeal-confirm-cancel="Keep">
                     @csrf
                     @method('DELETE')
                     <button type="submit"

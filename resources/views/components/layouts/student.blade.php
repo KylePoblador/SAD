@@ -16,6 +16,7 @@
 
 <body
     class="min-h-screen bg-gray-100 pb-[max(7rem,calc(4.75rem+env(safe-area-inset-bottom,0px)))] font-sans text-gray-900 antialiased">
+    @include('partials.coinmeal-dialogs')
     @include('partials.student-topbar')
 
     @php

@@ -55,4 +55,22 @@ class User extends Authenticatable
 
         return asset($this->avatar_path);
     }
+
+    public function friendshipsSent()
+    {
+        return $this->hasMany(Friendship::class, 'user_id');
+    }
+
+    public function friendshipsReceived()
+    {
+        return $this->hasMany(Friendship::class, 'friend_id');
+    }
+
+    public function getFriendsAttribute()
+    {
+        $sent = $this->friendshipsSent()->where('status', 'accepted')->with('friend')->get()->pluck('friend');
+        $received = $this->friendshipsReceived()->where('status', 'accepted')->with('user')->get()->pluck('user');
+
+        return $sent->merge($received);
+    }
 }

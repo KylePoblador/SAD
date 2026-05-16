@@ -22,6 +22,7 @@
 </head>
 
 <body class="min-h-screen bg-gray-100 pb-8 font-sans text-gray-900 antialiased">
+    @include('partials.coinmeal-dialogs')
     <header class="sticky top-0 z-20 border-b border-gray-200 bg-white shadow-sm">
         <div class="{{ $inner }} flex items-start justify-between gap-3 py-3">
             <div class="min-w-0">

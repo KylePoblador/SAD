@@ -272,8 +272,11 @@ class InAppNotificationFeed
     {
         return match ($n->type) {
             ActivityNotification::TYPE_WALLET_LOADED,
+            ActivityNotification::TYPE_WALLET_TRANSFER,
             ActivityNotification::TYPE_DEPOSIT_INQUIRY_STUDENT,
             ActivityNotification::TYPE_DEPOSIT_INQUIRY_DONE => route('student.wallet', [], false),
+            ActivityNotification::TYPE_FRIEND_REQUEST,
+            ActivityNotification::TYPE_FRIEND_ACCEPTED => route('student.friends.index', [], false),
             ActivityNotification::TYPE_SEAT_RESERVED,
             ActivityNotification::TYPE_SEAT_RELEASED => route('student.dashboard', [], false),
             default => route('student.notification', [], false),

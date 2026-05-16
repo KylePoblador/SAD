@@ -10,6 +10,7 @@
 </head>
 
 <body class="min-h-screen bg-gray-100 font-sans text-gray-900 antialiased">
+    @include('partials.coinmeal-dialogs')
     <main class="coinmeal-container py-4">
         @yield('content')
     </main>

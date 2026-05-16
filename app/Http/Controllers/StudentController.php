@@ -12,11 +12,13 @@ use App\Models\OrderItem;
 use App\Models\PaymentReceipt;
 use App\Models\QrPaymentToken;
 use App\Models\SeatLayout;
+use App\Models\SeatReservation;
 use App\Models\User;
 use App\Models\UserCanteenBalance;
-use App\Models\WalletDepositInquiry;
 use App\Models\WalletLoadLog;
+use App\Models\WalletLoadQrToken;
 use App\Services\InAppNotificationFeed;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -103,6 +105,19 @@ class StudentController extends Controller
         $collegeNorm = UserCanteenBalance::normalizedCollege($college);
         if (! array_key_exists($collegeNorm, $catalog)) {
             abort(404);
+        }
+
+        if (request()->has('change_mode')) {
+            session()->forget('canteen_mode_' . $collegeNorm);
+            return redirect()->route('student.canteen', $collegeNorm);
+        }
+
+        $orderMode = session('canteen_mode_' . $collegeNorm);
+        if (!$orderMode) {
+            return view('student.canteen.mode', [
+                'college' => $collegeNorm,
+                'canteenName' => $catalog[$collegeNorm]['label'],
+            ]);
         }
 
         $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm);
@@ -469,12 +484,11 @@ class StudentController extends Controller
             'recent_transactions' => $recentTransactions,
         ];
 
-        $connectRecipients = User::query()
-            ->where('id', '!=', (int) $user->id)
-            ->where('role', 'student')
-            ->select('id', 'name', 'email', 'student_id')
-            ->orderBy('name')
-            ->limit(30)
+        $connectRecipients = $user->friends;
+
+        $pendingFriendRequests = \App\Models\Friendship::with('user')
+            ->where('friend_id', $user->id)
+            ->where('status', 'pending')
             ->get();
 
         return view('student.wallet', [
@@ -482,6 +496,7 @@ class StudentController extends Controller
             'topUpCanteens' => $this->topUpCanteenOptions(),
             'canSendCoinsFrom' => collect($wallet['canteen_balances'])->where('balance', '>', 0)->values()->all(),
             'connectRecipients' => $connectRecipients,
+            'pendingFriendRequests' => $pendingFriendRequests,
         ]);
     }
 
@@ -518,62 +533,62 @@ class StudentController extends Controller
         return $options;
     }
 
-    public function storeWalletDepositInquiry(Request $request)
+    public function generateWalletLoadQr(Request $request)
     {
+        if (! Schema::hasTable('wallet_load_qr_tokens')) {
+            return back()->withErrors(['wallet' => 'Wallet QR is not ready yet. Ask an administrator to run database migrations.']);
+        }
+
         $allowedSlugs = collect($this->topUpCanteenOptions())->pluck('slug')->all();
 
         $validated = $request->validate([
+            '_form' => ['required', 'string', Rule::in(['wallet-load-qr'])],
             'college' => ['required', 'string', Rule::in($allowedSlugs)],
-            'intended_amount' => ['nullable', 'numeric', 'min:1', 'max:999999.99'],
-            'note' => ['nullable', 'string', 'max:500'],
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
         ]);
 
-        $inquiry = WalletDepositInquiry::create([
+        $slug = strtolower($validated['college']);
+
+        $tokenRow = WalletLoadQrToken::query()->create([
             'user_id' => $request->user()->id,
-            'college' => strtolower($validated['college']),
-            'intended_amount' => isset($validated['intended_amount']) ? $validated['intended_amount'] : null,
-            'note' => $validated['note'] ?? null,
-            'status' => 'pending',
+            'college' => $slug,
+            'amount' => $validated['amount'],
+            'token' => Str::random(48),
+            'expires_at' => now()->addMinutes(30),
         ]);
 
-        $label = config('canteens')[$validated['college']]['label'] ?? $validated['college'];
-        $student = $request->user();
+        return redirect()->route('student.wallet.load-qr.show', ['token' => $tokenRow->token]);
+    }
 
-        $studentBody = 'Canteen: '.$label.'. ';
-        if ($inquiry->intended_amount !== null) {
-            $studentBody .= 'Planned amount: ₱'.number_format((float) $inquiry->intended_amount, 2).'. ';
-        }
-        $studentBody .= 'Go to the counter and pay cash — staff can see your inquiry.';
-
-        ActivityNotification::notifyUser(
-            $student->id,
-            ActivityNotification::TYPE_DEPOSIT_INQUIRY_STUDENT,
-            'Wallet top-up request sent',
-            $studentBody,
-            $inquiry->id
-        );
-
-        $staffBody = $student->name.' requested a wallet deposit.';
-        if ($inquiry->intended_amount !== null) {
-            $staffBody .= ' Planned: ₱'.number_format((float) $inquiry->intended_amount, 2).'.';
-        }
-        if (! empty($inquiry->note)) {
-            $staffBody .= ' Note: '.$inquiry->note;
+    public function showWalletLoadQr(string $token)
+    {
+        if (! Schema::hasTable('wallet_load_qr_tokens')) {
+            abort(503, 'Wallet QR is not ready. Run migrations.');
         }
 
-        ActivityNotification::notifyStaffOfCollege(
-            strtolower($validated['college']),
-            ActivityNotification::TYPE_DEPOSIT_INQUIRY_STAFF,
-            'New wallet deposit inquiry',
-            $staffBody,
-            $inquiry->id
-        );
+        $entry = WalletLoadQrToken::query()
+            ->where('token', $token)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
 
-        return redirect()
-            ->route('student.wallet')
-            ->with('status', 'deposit-inquiry-sent')
-            ->with('deposit_target', $label)
-            ->with('deposit_college_slug', $validated['college']);
+        if ($entry->consumed_at !== null) {
+            return redirect()->route('student.wallet')->with('error', 'wallet-load-qr-used');
+        }
+        if ($entry->expires_at->isPast()) {
+            return redirect()->route('student.wallet')->with('error', 'wallet-load-qr-expired');
+        }
+
+        $catalog = config('canteens', []);
+        $cid = UserCanteenBalance::normalizedCollege((string) $entry->college);
+        $canteenLabel = $catalog[$cid]['label'] ?? strtoupper((string) $entry->college);
+        $staffScanUrl = url('/staff/wallet-load/'.$entry->token);
+
+        return view('student.wallet.load-qr', [
+            'entry' => $entry,
+            'canteenLabel' => $canteenLabel,
+            'studentName' => auth()->user()->name,
+            'staffScanUrl' => $staffScanUrl,
+        ]);
     }
 
     public function updateWalletBalance(Request $request, $studentId)
@@ -594,15 +609,10 @@ class StudentController extends Controller
         $studentCollege = strtolower(trim((string) ($student->college ?? '')));
 
         $assignedToCanteen = $studentCollege === $staffCollege;
-        $hasPendingInquiry = WalletDepositInquiry::query()
-            ->where('user_id', $student->id)
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$staffCollege])
-            ->where('status', 'pending')
-            ->exists();
 
-        if (! $assignedToCanteen && ! $hasPendingInquiry) {
+        if (! $assignedToCanteen) {
             return response()->json([
-                'error' => 'This student has no pending deposit request for your canteen. They can submit a new request from Wallet.',
+                'error' => 'Student profile college must match this canteen.',
             ], 403);
         }
 
@@ -622,24 +632,8 @@ class StudentController extends Controller
             'amount' => $amount,
         ]);
 
-        $closedCount = WalletDepositInquiry::query()
-            ->where('user_id', $student->id)
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$staffCollege])
-            ->where('status', 'pending')
-            ->update(['status' => 'done']);
-
         $canteenLabel = config('canteens')[$staffCollege]['label'] ?? $staffCollege;
         $totalBalance = UserCanteenBalance::totalForUser((int) $student->id);
-
-        if ($closedCount > 0) {
-            ActivityNotification::notifyUser(
-                $student->id,
-                ActivityNotification::TYPE_DEPOSIT_INQUIRY_DONE,
-                'Deposit inquiry completed',
-                '₱'.number_format($amount, 2).' was added to your '.$canteenLabel.' wallet. Balance there: ₱'.number_format($newCanteenBalance, 2).'. Total all canteens: ₱'.number_format($totalBalance, 2).'.',
-                null
-            );
-        }
 
         ActivityNotification::notifyUser(
             $student->id,
@@ -654,9 +648,21 @@ class StudentController extends Controller
             'new_balance' => $totalBalance,
             'new_canteen_balance' => $newCanteenBalance,
             'canteen' => $staffCollege,
-            'inquiries_closed' => $closedCount,
             'message' => 'Wallet updated successfully',
         ]);
+    }
+
+    public function setOrderMode(Request $request, string $college)
+    {
+        $collegeNorm = UserCanteenBalance::normalizedCollege($college);
+        
+        $validated = $request->validate([
+            'mode' => ['required', 'string', 'in:dine_in,takeout'],
+        ]);
+
+        session(['canteen_mode_' . $collegeNorm => $validated['mode']]);
+
+        return redirect()->route('student.canteen', $collegeNorm);
     }
 
     public function cartHub()
@@ -706,6 +712,7 @@ class StudentController extends Controller
             'subtotal' => $subtotal,
             'walletBalance' => UserCanteenBalance::balanceFor((int) auth()->id(), $collegeNorm),
             'hasReservedSeat' => $hasSeat,
+            'orderMode' => session('canteen_mode_' . $collegeNorm) ?? 'dine_in',
         ]);
     }
 
@@ -718,13 +725,7 @@ class StudentController extends Controller
             ->where('user_id', auth()->id())
             ->exists();
 
-        if (! $hasSeat) {
-            $message = 'Reserve a seat at this canteen before adding items to your cart.';
-
-            return $request->wantsJson()
-                ? response()->json(['message' => $message], 422)
-                : back()->withErrors(['cart' => $message]);
-        }
+        // Seat check is removed, since seat reservation is now at checkout.
 
         $validated = $request->validate([
             'menu_item_id' => ['required', 'integer', Rule::exists('menu_items', 'id')],
@@ -820,28 +821,18 @@ class StudentController extends Controller
     {
         $collegeNorm = $this->assertCatalogCollege($college);
 
+        $orderMode = session('canteen_mode_' . $collegeNorm) ?? 'dine_in';
+
+        if ($orderMode === 'dine_in') {
+            session(['checkout_coupon_' . $collegeNorm => $request->input('coupon_code')]);
+            return redirect()->route('student.reserve', $collegeNorm);
+        }
+
         $validatedRequest = $request->validate([
-            'order_mode' => ['required', Rule::in(['dine_in', 'takeout'])],
             'coupon_code' => ['nullable', 'string', 'max:32'],
         ]);
-        $orderMode = $validatedRequest['order_mode'];
-
-        $hasSeat = DB::table('seat_reservations')
-            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-            ->where('user_id', auth()->id())
-            ->exists();
-
-        if ($orderMode === 'dine_in' && ! $hasSeat) {
-            return back()->withErrors(['checkout' => 'Reserve a seat before placing an order.']);
-        }
 
         $seatNumber = null;
-        if ($orderMode === 'dine_in') {
-            $seatNumber = DB::table('seat_reservations')
-                ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-                ->where('user_id', auth()->id())
-                ->value('seat_number');
-        }
 
         $lines = $this->getCartLines($collegeNorm);
         if ($lines === []) {
@@ -1000,8 +991,11 @@ class StudentController extends Controller
         $usersTable = (new User)->getTable();
         $hasUsername = Schema::hasColumn($usersTable, 'username');
 
+        $user = auth()->user();
+        $friendsIds = $user->friends->pluck('id')->toArray();
+
         $items = User::query()
-            ->where('id', '!=', auth()->id())
+            ->whereIn('id', $friendsIds)
             ->where(function ($q) use ($term, $hasUsername) {
                 $q->where('name', 'like', '%'.$term.'%')
                     ->orWhere('email', 'like', '%'.$term.'%')
@@ -1059,6 +1053,13 @@ class StudentController extends Controller
                     'amount' => (float) $validated['amount'],
                     'note' => $validated['note'] ?? null,
                 ]);
+
+                \App\Models\ActivityNotification::notifyUser(
+                    (int) $validated['receiver_user_id'],
+                    \App\Models\ActivityNotification::TYPE_WALLET_TRANSFER,
+                    'Coins Received',
+                    auth()->user()->name . ' sent you ₱' . number_format((float) $validated['amount'], 2) . ' (' . strtoupper($transferCollege) . ').'
+                );
             });
         } catch (\RuntimeException $e) {
             return back()->withErrors(['connect' => $e->getMessage()]);
@@ -1124,12 +1125,224 @@ class StudentController extends Controller
         return (int) collect($this->getCartLines($collegeNorm))->sum(fn ($l) => (int) ($l['qty'] ?? 0));
     }
 
-    protected function findAvailableMenuItem(int $menuItemId, string $collegeNorm): ?MenuItem
+    public function reserveSeatForm(string $college)
     {
-        return MenuItem::query()
-            ->whereKey($menuItemId)
+        $collegeNorm = UserCanteenBalance::normalizedCollege((string) $college);
+        if (! array_key_exists($collegeNorm, config('canteens', []))) {
+            abort(404);
+        }
+
+        $seatCount = 25;
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm, $seatCount);
+        $seatCounts = DB::table('seat_reservations')
             ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
-            ->where('is_available', true)
-            ->first();
+            ->select('seat_number', DB::raw('COUNT(*) as count'))
+            ->groupBy('seat_number')
+            ->pluck('count', 'seat_number');
+
+        $fullSeats = collect(range(1, $seatCount))
+            ->filter(fn ($seatNumber) => ($seatCounts[$seatNumber] ?? 0) >= ($seatCapacities[$seatNumber] ?? 1))
+            ->values()
+            ->all();
+
+        return view('student.reservation.reserve', [
+            'college' => $collegeNorm,
+            'occupied' => $fullSeats,
+            'seatCapacities' => $seatCapacities,
+            'seatCounts' => $seatCounts,
+            'totalSeats' => $seatCapacities->sum(),
+            'occupiedCount' => $seatCounts->sum(),
+            'availableCount' => max($seatCapacities->sum() - $seatCounts->sum(), 0),
+        ]);
+    }
+
+    public function reserveSeatConfirm(Request $request)
+    {
+        $canteenKeys = array_keys(config('canteens', []));
+        $request->merge([
+            'college' => UserCanteenBalance::normalizedCollege((string) $request->input('college', '')),
+        ]);
+
+        $validated = $request->validate([
+            'college' => ['required', 'string', Rule::in($canteenKeys)],
+            'seat' => ['nullable', 'integer', 'between:1,25'],
+            'share_code' => ['nullable', 'string', 'size:6'],
+        ]);
+
+        if (empty($validated['seat']) && empty($validated['share_code'])) {
+            return back()->with('error', 'Please select a seat from the map or enter a Seat Code.');
+        }
+
+        $collegeNorm = $validated['college'];
+        $seatNumber = $validated['seat'];
+        $shareCode = null;
+
+        // If a share code is provided, use it to find the seat
+        if (!empty($validated['share_code'])) {
+            $existingRes = SeatReservation::where('share_code', strtoupper($validated['share_code']))->first();
+            if (!$existingRes) {
+                return back()->with('error', 'Invalid Seat Code.');
+            }
+            if (strtolower(trim($existingRes->college)) !== $collegeNorm) {
+                return back()->with('error', 'That Seat Code is for a different canteen.');
+            }
+            $seatNumber = $existingRes->seat_number;
+            $shareCode = $existingRes->share_code;
+        }
+
+        $seatCapacities = SeatLayout::getLayoutForCollege($collegeNorm);
+        $alreadyTaken = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('seat_number', $seatNumber)
+            ->where('user_id', '!=', auth()->id())
+            ->count();
+
+        if ($alreadyTaken >= ($seatCapacities[$seatNumber] ?? 1)) {
+            return back()->with('error', 'Seat is full. Please choose another seat.');
+        }
+
+        // Now process the checkout + seat reservation together
+        $lines = $this->getCartLines($collegeNorm);
+        if ($lines === []) {
+            return redirect()->route('student.cart', $collegeNorm)->withErrors(['checkout' => 'Your cart is empty.']);
+        }
+
+        $couponCode = session('checkout_coupon_' . $collegeNorm);
+
+        try {
+            $placedOrder = DB::transaction(function () use ($collegeNorm, $lines, $couponCode, $seatNumber, &$shareCode) {
+                $validatedLines = [];
+                $total = 0.0;
+
+                foreach ($lines as $line) {
+                    $menu = $this->findAvailableMenuItem((int) ($line['menu_item_id'] ?? 0), $collegeNorm);
+                    if (! $menu) {
+                        throw new \RuntimeException('One or more items are no longer available. Open the menu and refresh your cart.');
+                    }
+                    $qty = max(1, (int) ($line['qty'] ?? 1));
+                    $unit = (float) $menu->price;
+                    $validatedLines[] = [
+                        'menu' => $menu,
+                        'qty' => $qty,
+                        'unit' => $unit,
+                    ];
+                    $total += $unit * $qty;
+                }
+
+                $total = round($total, 2);
+                if ($total <= 0 || $validatedLines === []) {
+                    throw new \RuntimeException('Your cart is empty.');
+                }
+
+                $coupon = null;
+                $discount = 0.0;
+                if (! empty($couponCode) && \Illuminate\Support\Facades\Schema::hasTable('coupons')) {
+                    $coupon = \App\Models\Coupon::query()
+                        ->where('code', strtoupper(trim((string) $couponCode)))
+                        ->where('is_active', true)
+                        ->first();
+                    if ($coupon) {
+                        $now = now();
+                        if (($coupon->starts_at && $now->lt($coupon->starts_at))
+                            || ($coupon->ends_at && $now->gt($coupon->ends_at))
+                            || ((float) $coupon->min_order_total > $total + 1e-6)
+                            || ($coupon->usage_limit !== null && (int) $coupon->used_count >= (int) $coupon->usage_limit)) {
+                            $coupon = null;
+                        }
+                    }
+                    if ($coupon) {
+                        $discount = $coupon->type === 'percent'
+                            ? round($total * ((float) $coupon->value / 100), 2)
+                            : round((float) $coupon->value, 2);
+                        $discount = min($discount, $total);
+                    }
+                }
+                $payable = max(round($total - $discount, 2), 0.0);
+
+                if ($payable > 0) {
+                    UserCanteenBalance::subtract((int) auth()->id(), $collegeNorm, $payable);
+                }
+
+                // Reserve the seat
+                SeatReservation::where('user_id', auth()->id())
+                    ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+                    ->delete();
+
+                if (!$shareCode) {
+                    $shareCode = strtoupper(\Illuminate\Support\Str::random(6));
+                }
+
+                SeatReservation::create([
+                    'user_id' => auth()->id(),
+                    'college' => $collegeNorm,
+                    'seat_number' => $seatNumber,
+                    'share_code' => $shareCode,
+                ]);
+
+                $orderPayload = [
+                    'user_id' => auth()->id(),
+                    'order_number' => null,
+                    'status' => 'pending',
+                    'total' => $total,
+                    'canteen_id' => $collegeNorm,
+                    'is_read' => false,
+                ];
+                if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'discount_amount')) {
+                    $orderPayload['discount_amount'] = $discount;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'payable_total')) {
+                    $orderPayload['payable_total'] = $payable;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'coupon_id')) {
+                    $orderPayload['coupon_id'] = $coupon?->id;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'order_mode')) {
+                    $orderPayload['order_mode'] = 'dine_in';
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'seat_number')) {
+                    $orderPayload['seat_number'] = $seatNumber;
+                }
+
+                $order = Order::create($orderPayload);
+                if ($coupon) {
+                    $coupon->increment('used_count');
+                }
+
+                $order->update([
+                    'order_number' => 'ORD-'.now()->format('Ymd').'-'.str_pad((string) $order->id, 4, '0', STR_PAD_LEFT),
+                ]);
+
+                foreach ($validatedLines as $row) {
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'name' => $row['menu']->name,
+                        'price' => $row['unit'],
+                        'qty' => $row['qty'],
+                    ]);
+                }
+
+                $this->putCartLines($collegeNorm, []);
+
+                return $order->fresh();
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        session()->forget('checkout_coupon_' . $collegeNorm);
+
+        $canteenLabel = config('canteens')[$collegeNorm]['label'] ?? $collegeNorm;
+        \App\Models\ActivityNotification::notifyUser(
+            auth()->id(),
+            \App\Models\ActivityNotification::TYPE_SEAT_RESERVED,
+            'Seat reserved',
+            'Seat #'.$seatNumber.' at '.$canteenLabel.'.',
+            null
+        );
+
+        return redirect()->route('student.orders')
+            ->with('status', 'order-placed')
+            ->with('order_placed_canteen', $canteenLabel)
+            ->with('order_placed_id', $placedOrder->id);
     }
 }
