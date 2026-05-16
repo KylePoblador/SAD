@@ -67,7 +67,19 @@ Route::get('/admin/dashboard', [AdminController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('admin.dashboard');
 
-Route::get('/admin/refunds', [RefundController::class, 'index'])
+Route::get('/admin/transactions', [AdminController::class, 'transactions'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.transactions');
+
+Route::get('/admin/users', [AdminController::class, 'users'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.users');
+
+Route::get('/admin/users/{user}', [AdminController::class, 'showUser'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.users.show');
+
+Route::get('/admin/refunds', [AdminController::class, 'refunds'])
     ->middleware(['auth', 'verified'])
     ->name('admin.refunds');
 

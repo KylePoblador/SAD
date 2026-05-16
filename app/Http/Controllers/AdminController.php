@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Coupon;
 use App\Models\Order;
+use App\Models\Refund;
 use App\Models\User;
+use App\Models\UserCanteenBalance;
+use App\Services\AdminTransactionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -12,10 +15,13 @@ use Illuminate\Support\Facades\Schema;
 
 class AdminController extends Controller
 {
+    public function __construct(
+        protected AdminTransactionService $transactions,
+    ) {}
+
     protected function assertAdmin(): void
     {
-        $role = strtolower(trim((string) (auth()->user()->role ?? '')));
-        if ($role !== 'admin') {
+        if (strtolower(trim((string) (auth()->user()->role ?? ''))) !== 'admin') {
             abort(403);
         }
     }
@@ -24,11 +30,9 @@ class AdminController extends Controller
     {
         $this->assertAdmin();
 
-        $now = now();
-        $inactiveCutoff = $now->copy()->subMonths(6);
+        $inactiveCutoff = now()->subMonths(6);
         $hasLastLoginAt = Schema::hasColumn('users', 'last_login_at');
         $hasIsInactive = Schema::hasColumn('users', 'is_inactive');
-        $hasInactiveLabeledAt = Schema::hasColumn('users', 'inactive_labeled_at');
 
         $userSelect = ['id', 'name', 'email', 'role'];
         if ($hasLastLoginAt) {
@@ -37,27 +41,26 @@ class AdminController extends Controller
         if ($hasIsInactive) {
             $userSelect[] = 'is_inactive';
         }
-        if ($hasInactiveLabeledAt) {
-            $userSelect[] = 'inactive_labeled_at';
-        }
 
         $users = User::query()
             ->select($userSelect)
+            ->whereIn('role', ['student', 'staff'])
             ->latest()
-            ->take(20)
+            ->take(15)
             ->get();
+
         $lastOrdersByUser = Order::query()
             ->select('user_id', DB::raw('MAX(created_at) as last_order_at'))
             ->groupBy('user_id')
             ->pluck('last_order_at', 'user_id');
-        $usersWithActivity = $users->map(function (User $user) use ($lastOrdersByUser, $inactiveCutoff) {
+
+        $latestUsers = $users->map(function (User $user) use ($lastOrdersByUser, $inactiveCutoff, $hasLastLoginAt, $hasIsInactive) {
             $lastOrderAt = isset($lastOrdersByUser[$user->id]) ? Carbon::parse((string) $lastOrdersByUser[$user->id]) : null;
             $lastLoginAt = $hasLastLoginAt && $user->last_login_at ? Carbon::parse((string) $user->last_login_at) : null;
             $lastActiveAt = $lastLoginAt;
             if ($lastOrderAt && (! $lastActiveAt || $lastOrderAt->gt($lastActiveAt))) {
                 $lastActiveAt = $lastOrderAt;
             }
-            $isAutoInactive = ! $lastActiveAt || $lastActiveAt->lt($inactiveCutoff);
 
             return (object) [
                 'id' => $user->id,
@@ -65,49 +68,123 @@ class AdminController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'last_active_at' => $lastActiveAt,
-                'is_auto_inactive' => $isAutoInactive,
+                'is_auto_inactive' => ! $lastActiveAt || $lastActiveAt->lt($inactiveCutoff),
                 'is_inactive' => $hasIsInactive ? (bool) $user->is_inactive : false,
             ];
         });
 
-        $inactiveCount = $usersWithActivity
-            ->filter(fn ($u) => $u->is_auto_inactive || $u->is_inactive)
-            ->count();
-
-        $usersByRole = User::query()
-            ->select('role', DB::raw('COUNT(*) as total'))
-            ->groupBy('role')
-            ->pluck('total', 'role');
+        $usersByRole = User::query()->select('role', DB::raw('COUNT(*) as total'))->groupBy('role')->pluck('total', 'role');
 
         return view('admin.dashboard', [
-            'totalUsers' => (int) User::query()->count(),
+            'totalUsers' => (int) User::query()->whereIn('role', ['student', 'staff'])->count(),
             'studentCount' => (int) ($usersByRole['student'] ?? 0),
             'staffCount' => (int) ($usersByRole['staff'] ?? 0),
             'adminCount' => (int) ($usersByRole['admin'] ?? 0),
             'totalOrders' => (int) Order::query()->count(),
             'activeCoupons' => (int) Coupon::query()->where('is_active', true)->count(),
-            'inactiveCount' => $inactiveCount,
-            'latestUsers' => $usersWithActivity,
+            'inactiveCount' => Schema::hasColumn('users', 'is_inactive')
+                ? (int) User::query()->whereIn('role', ['student', 'staff'])->where('is_inactive', true)->count()
+                : 0,
+            'latestUsers' => $latestUsers,
+            'recentTransactions' => $this->transactions->recent(20),
+        ]);
+    }
+
+    public function transactions(Request $request)
+    {
+        $this->assertAdmin();
+
+        $validated = $request->validate([
+            'type' => ['nullable', 'string', 'in:order,wallet_load,coin_transfer,refund,payment'],
+            'role' => ['nullable', 'string', 'in:student,staff'],
+        ]);
+
+        return view('admin.transactions.index', [
+            'transactions' => $this->transactions->paginate(30, $validated['type'] ?? null, $validated['role'] ?? null),
+            'filters' => ['type' => $validated['type'] ?? null, 'role' => $validated['role'] ?? null],
+        ]);
+    }
+
+    public function users(Request $request)
+    {
+        $this->assertAdmin();
+
+        $validated = $request->validate([
+            'role' => ['nullable', 'string', 'in:student,staff'],
+            'q' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $users = User::query()
+            ->whereIn('role', ['student', 'staff'])
+            ->when($validated['role'] ?? null, fn ($q, $role) => $q->where('role', $role))
+            ->when($validated['q'] ?? null, function ($q, $search) {
+                $term = '%'.trim($search).'%';
+                $q->where(fn ($inner) => $inner
+                    ->where('name', 'like', $term)
+                    ->orWhere('email', 'like', $term)
+                    ->orWhere('student_id', 'like', $term)
+                    ->orWhere('phone', 'like', $term));
+            })
+            ->orderBy('name')
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('admin.users.index', [
+            'users' => $users,
+            'filters' => ['role' => $validated['role'] ?? null, 'q' => $validated['q'] ?? null],
+        ]);
+    }
+
+    public function showUser(User $user)
+    {
+        $this->assertAdmin();
+
+        if (! in_array($user->role, ['student', 'staff'], true)) {
+            abort(404);
+        }
+
+        $canteenBalances = [];
+        if ($user->role === 'student' && Schema::hasTable('user_canteen_balances')) {
+            $canteenBalances = UserCanteenBalance::query()->where('user_id', $user->id)->get();
+        }
+
+        return view('admin.users.show', [
+            'user' => $user,
+            'canteenBalances' => $canteenBalances,
+            'recentTransactions' => $this->transactions->recent(30, $user->id),
+            'orderCount' => $user->orders()->count(),
+            'walletLoadCount' => $user->walletLoadsAsStudent()->count(),
+            'transferCount' => $user->coinTransfersSent()->count() + $user->coinTransfersReceived()->count(),
+            'refundCount' => $user->refundsAsStudent()->count(),
+        ]);
+    }
+
+    public function refunds()
+    {
+        $this->assertAdmin();
+
+        return view('admin.refunds.index', [
+            'refunds' => Refund::query()->with(['staff:id,name,email,role', 'student:id,name,email,role'])->latest()->paginate(30),
+            'totalRefunded' => (float) Refund::query()->sum('amount'),
         ]);
     }
 
     public function toggleInactiveLabel(Request $request, User $user)
     {
         $this->assertAdmin();
+
         if (! Schema::hasColumn('users', 'is_inactive')) {
             return back()->with('error', 'Inactive labeling is not ready. Run migrations first.');
         }
 
-        $validated = $request->validate([
-            'is_inactive' => ['required', 'boolean'],
-        ]);
+        $validated = $request->validate(['is_inactive' => ['required', 'boolean']]);
         $isInactive = (bool) $validated['is_inactive'];
         $user->update([
             'is_inactive' => $isInactive,
             'inactive_labeled_at' => $isInactive ? now() : null,
         ]);
 
-        return redirect()->route('admin.dashboard')->with('status', 'User inactive label updated.');
+        return back()->with('status', 'User inactive label updated.');
     }
 
     public function coupons()

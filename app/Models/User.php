@@ -56,6 +56,41 @@ class User extends Authenticatable
         return asset($this->avatar_path);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function walletLoadsAsStudent()
+    {
+        return $this->hasMany(WalletLoadLog::class, 'student_user_id');
+    }
+
+    public function walletLoadsAsStaff()
+    {
+        return $this->hasMany(WalletLoadLog::class, 'staff_user_id');
+    }
+
+    public function coinTransfersSent()
+    {
+        return $this->hasMany(CoinTransfer::class, 'sender_user_id');
+    }
+
+    public function coinTransfersReceived()
+    {
+        return $this->hasMany(CoinTransfer::class, 'receiver_user_id');
+    }
+
+    public function refundsAsStudent()
+    {
+        return $this->hasMany(Refund::class, 'student_user_id');
+    }
+
+    public function refundsAsStaff()
+    {
+        return $this->hasMany(Refund::class, 'staff_user_id');
+    }
+
     public function friendshipsSent()
     {
         return $this->hasMany(Friendship::class, 'user_id');
