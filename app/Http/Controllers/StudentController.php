@@ -9,8 +9,8 @@ use App\Models\Coupon;
 use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\PaymentReceipt;
-use App\Models\QrPaymentToken;
+
+
 use App\Models\SeatLayout;
 use App\Models\SeatReservation;
 use App\Models\User;
@@ -420,28 +420,8 @@ class StudentController extends Controller
                 ->toArray();
         }
 
-        $receiptTransactions = [];
-        if (Schema::hasTable('payment_receipts')) {
-            $receiptTransactions = PaymentReceipt::query()
-                ->where('user_id', (int) $user->id)
-                ->latest('paid_at')
-                ->take(10)
-                ->get()
-                ->map(function (PaymentReceipt $receipt) {
-                    return [
-                        'description' => 'QR receipt '.$receipt->receipt_number,
-                        'amount' => (float) $receipt->amount,
-                        'type' => 'debit',
-                        'date' => ($receipt->paid_at ?? $receipt->created_at)?->format('M d, Y H:i'),
-                        'receipt_url' => route('student.wallet.receipts.show', $receipt),
-                    ];
-                })
-                ->toArray();
-        }
-
         $recentTransactions = collect($recentTransactions)
             ->merge($transferTransactions)
-            ->merge($receiptTransactions)
             ->sortByDesc(fn ($row) => strtotime((string) $row['date']))
             ->take(12)
             ->values()
@@ -953,33 +933,6 @@ class StudentController extends Controller
             ->with('order_placed_id', $placedOrder->id);
     }
 
-    public function generateOrderQr(Order $order)
-    {
-        if ((int) $order->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-        if (! Schema::hasTable('qr_payment_tokens')) {
-            return back()->with('error', 'QR feature is not ready. Run migrations first.');
-        }
-
-        $token = QrPaymentToken::query()->create([
-            'order_id' => $order->id,
-            'issued_by_user_id' => auth()->id(),
-            'token' => Str::random(48),
-            'expires_at' => now()->addMinutes(20),
-        ]);
-
-        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
-        $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
-        $canteenLabel = $labels[$cid] ?? strtoupper((string) $order->canteen_id);
-
-        return view('student.orders.qr', [
-            'order' => $order,
-            'canteenLabel' => $canteenLabel,
-            'studentName' => auth()->user()->name,
-            'qrToken' => $token->token,
-        ]);
-    }
 
     public function connectSearch(Request $request)
     {
@@ -1068,23 +1021,6 @@ class StudentController extends Controller
         return back()->with('status', 'coins-shared');
     }
 
-    public function showWalletReceipt(PaymentReceipt $receipt)
-    {
-        if ((int) $receipt->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
-        $order = $receipt->order()->with('items')->first();
-        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
-        $cid = UserCanteenBalance::normalizedCollege((string) ($receipt->canteen_id ?: $order?->canteen_id));
-
-        return view('student.receipts.show', [
-            'receipt' => $receipt,
-            'order' => $order,
-            'canteenLabel' => $labels[$cid] ?? strtoupper((string) $cid),
-            'studentName' => auth()->user()->name,
-        ]);
-    }
 
     protected function assertCatalogCollege(string $college): string
     {

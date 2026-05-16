@@ -42,19 +42,29 @@ class AdminController extends Controller
             $userSelect[] = 'is_inactive';
         }
 
-        $users = User::query()
+        $students = User::query()
             ->select($userSelect)
-            ->whereIn('role', ['student', 'staff'])
+            ->where('role', 'student')
             ->latest()
-            ->take(15)
+            ->take(10)
             ->get();
+
+        $staff = User::query()
+            ->select($userSelect)
+            ->where('role', 'staff')
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $allUserIds = $students->pluck('id')->merge($staff->pluck('id'));
 
         $lastOrdersByUser = Order::query()
             ->select('user_id', DB::raw('MAX(created_at) as last_order_at'))
+            ->whereIn('user_id', $allUserIds)
             ->groupBy('user_id')
             ->pluck('last_order_at', 'user_id');
 
-        $latestUsers = $users->map(function (User $user) use ($lastOrdersByUser, $inactiveCutoff, $hasLastLoginAt, $hasIsInactive) {
+        $mapUser = function (User $user) use ($lastOrdersByUser, $inactiveCutoff, $hasLastLoginAt, $hasIsInactive) {
             $lastOrderAt = isset($lastOrdersByUser[$user->id]) ? Carbon::parse((string) $lastOrdersByUser[$user->id]) : null;
             $lastLoginAt = $hasLastLoginAt && $user->last_login_at ? Carbon::parse((string) $user->last_login_at) : null;
             $lastActiveAt = $lastLoginAt;
@@ -71,7 +81,10 @@ class AdminController extends Controller
                 'is_auto_inactive' => ! $lastActiveAt || $lastActiveAt->lt($inactiveCutoff),
                 'is_inactive' => $hasIsInactive ? (bool) $user->is_inactive : false,
             ];
-        });
+        };
+
+        $latestStudents = $students->map($mapUser);
+        $latestStaff = $staff->map($mapUser);
 
         $usersByRole = User::query()->select('role', DB::raw('COUNT(*) as total'))->groupBy('role')->pluck('total', 'role');
 
@@ -85,7 +98,8 @@ class AdminController extends Controller
             'inactiveCount' => Schema::hasColumn('users', 'is_inactive')
                 ? (int) User::query()->whereIn('role', ['student', 'staff'])->where('is_inactive', true)->count()
                 : 0,
-            'latestUsers' => $latestUsers,
+            'latestStudents' => $latestStudents,
+            'latestStaff' => $latestStaff,
             'recentTransactions' => $this->transactions->recent(20),
         ]);
     }
@@ -135,7 +149,7 @@ class AdminController extends Controller
         ]);
     }
 
-    public function showUser(User $user)
+    public function showUser(Request $request, User $user)
     {
         $this->assertAdmin();
 
@@ -143,19 +157,138 @@ class AdminController extends Controller
             abort(404);
         }
 
-        $canteenBalances = [];
+        $canteenBalances = collect();
         if ($user->role === 'student' && Schema::hasTable('user_canteen_balances')) {
             $canteenBalances = UserCanteenBalance::query()->where('user_id', $user->id)->get();
+        }
+
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        // Filter transactions
+        $recentTransactions = $this->transactions->recent(500, $user->id); // Increased limit for better filtering
+        if ($startDate) {
+            $start = Carbon::parse($startDate)->startOfDay();
+            $recentTransactions = $recentTransactions->filter(fn($tx) => $tx->occurred_at && $tx->occurred_at->gte($start));
+        }
+        if ($endDate) {
+            $end = Carbon::parse($endDate)->endOfDay();
+            $recentTransactions = $recentTransactions->filter(fn($tx) => $tx->occurred_at && $tx->occurred_at->lte($end));
+        }
+
+        // Student spending stats
+        $dailySpent = 0;
+        $weeklySpent = 0;
+        $monthlySpent = 0;
+
+        if ($user->role === 'student') {
+            $now = now();
+            $todayStart = $now->copy()->startOfDay();
+            $weekStart = $now->copy()->startOfWeek();
+            $monthStart = $now->copy()->startOfMonth();
+
+            $orders = Order::where('user_id', $user->id)->where('status', 'completed')->get();
+            $transfers = \App\Models\CoinTransfer::where('sender_user_id', $user->id)->get();
+
+            $sumSpent = function ($start) use ($orders, $transfers) {
+                $orderSum = $orders->where('created_at', '>=', $start)->sum(fn($o) => $o->payable_total ?? $o->total ?? 0);
+                $transferSum = $transfers->where('created_at', '>=', $start)->sum('amount');
+                return $orderSum + $transferSum;
+            };
+
+            $dailySpent = $sumSpent($todayStart);
+            $weeklySpent = $sumSpent($weekStart);
+            $monthlySpent = $sumSpent($monthStart);
         }
 
         return view('admin.users.show', [
             'user' => $user,
             'canteenBalances' => $canteenBalances,
-            'recentTransactions' => $this->transactions->recent(30, $user->id),
+            'recentTransactions' => $recentTransactions->values(),
             'orderCount' => $user->orders()->count(),
             'walletLoadCount' => $user->walletLoadsAsStudent()->count(),
             'transferCount' => $user->coinTransfersSent()->count() + $user->coinTransfersReceived()->count(),
             'refundCount' => $user->refundsAsStudent()->count(),
+            'dailySpent' => $dailySpent,
+            'weeklySpent' => $weeklySpent,
+            'monthlySpent' => $monthlySpent,
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ]
+        ]);
+    }
+
+    public function editUser(User $user)
+    {
+        $this->assertAdmin();
+
+        if (! in_array($user->role, ['student', 'staff'], true)) {
+            abort(404);
+        }
+
+        return view('admin.users.edit', compact('user'));
+    }
+
+    public function updateUser(Request $request, User $user)
+    {
+        $this->assertAdmin();
+
+        if (! in_array($user->role, ['student', 'staff'], true)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users')->ignore($user->id)],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'college' => ['nullable', 'string', 'max:100'],
+            'student_id' => ['nullable', 'string', 'max:50'],
+            'role' => ['required', 'string', 'in:student,staff'],
+        ]);
+
+        $user->update($validated);
+
+        return redirect()->route('admin.users.show', $user)->with('status', 'User profile updated successfully.');
+    }
+
+    public function reports()
+    {
+        $this->assertAdmin();
+
+        $now = now();
+        $todayStart = $now->copy()->startOfDay();
+        $weekStart = $now->copy()->startOfWeek();
+        $monthStart = $now->copy()->startOfMonth();
+
+        // Get completed orders with canteen
+        $orders = Order::where('status', 'completed')
+            ->whereNotNull('canteen_id')
+            ->get();
+
+        // Get all unique canteens (colleges) from staff users
+        $canteens = \App\Models\User::where('role', 'staff')
+            ->whereNotNull('college')
+            ->pluck('college')
+            ->unique()
+            ->filter()
+            ->values();
+
+        $canteenReports = collect();
+        foreach ($canteens as $canteen) {
+            $canteenOrders = $orders->where('canteen_id', $canteen);
+
+            $canteenReports->push((object) [
+                'canteen_id' => $canteen,
+                'daily_sales' => $canteenOrders->where('created_at', '>=', $todayStart)->sum(fn($o) => $o->payable_total ?? $o->total ?? 0),
+                'weekly_sales' => $canteenOrders->where('created_at', '>=', $weekStart)->sum(fn($o) => $o->payable_total ?? $o->total ?? 0),
+                'monthly_sales' => $canteenOrders->where('created_at', '>=', $monthStart)->sum(fn($o) => $o->payable_total ?? $o->total ?? 0),
+                'total_sales' => $canteenOrders->sum(fn($o) => $o->payable_total ?? $o->total ?? 0),
+            ]);
+        }
+
+        return view('admin.reports.index', [
+            'canteenReports' => $canteenReports->sortByDesc('total_sales')->values(),
         ]);
     }
 

@@ -1,4 +1,4 @@
-<x-layouts.staff-subpage title="QR scanner" subtitle="Scan order payment or wallet load QR">
+<x-layouts.staff-subpage title="QR scanner" subtitle="Scan wallet load QR">
     @if (session('status'))
         <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{{ session('status') }}</div>
     @endif
@@ -51,7 +51,7 @@
 
             function normalizeDecodedPayload(raw) {
                 let t = String(raw || '').trim();
-                const urlMatch = t.match(/\/staff\/qr\/([^/?#\s]+)/i);
+                const urlMatch = t.match(/\/staff\/wallet-load\/([^/?#\s]+)/i);
                 if (urlMatch) {
                     try {
                         return decodeURIComponent(urlMatch[1]);
@@ -87,7 +87,7 @@
 
                 const payload = normalizeDecodedPayload(raw);
                 if (!payload) return;
-                window.location.href = @json(url('/staff/qr')) + '/' + encodeURIComponent(payload);
+                window.location.href = @json(url('/staff/wallet-load')) + '/' + encodeURIComponent(payload);
             }
 
             async function stopCameraScanner() {
@@ -133,7 +133,7 @@
                             cameraScanner = null;
                         }, function () {});
                         cameraScanner = scanner;
-                        setHelp('Point the camera at the student payment QR.', false);
+                        setHelp('Point the camera at the student\'s wallet load QR.', false);
                         return;
                     } catch (e) {
                         lastErr = e;
@@ -156,7 +156,7 @@
                             cameraScanner = null;
                         }, function () {});
                         cameraScanner = s2;
-                        setHelp('Point the camera at the student payment QR.', false);
+                        setHelp('Point the camera at the student\'s wallet load QR.', false);
                         return;
                     }
                 } catch (e) {
@@ -219,11 +219,11 @@
                         readerEl.innerHTML =
                             '<div class="flex aspect-square min-h-[180px] flex-col items-center justify-center gap-2 px-3 py-4 text-center text-xs leading-snug text-gray-600">' +
                             '<span class="font-semibold text-gray-800">Camera blocked on plain HTTP</span>' +
-                            '<span>Browsers only allow camera on HTTPS or <code class="rounded bg-gray-100 px-1">localhost</code>. Use <strong>Upload QR image</strong> with a screenshot of the student QR, or paste the token.</span>' +
+                            '<span>Browsers only allow camera on HTTPS or <code class="rounded bg-gray-100 px-1">localhost</code>. Use <strong>Upload QR image</strong> with a screenshot of the wallet load QR, or paste the token.</span>' +
                             '</div>';
                     }
                     setHelp(
-                        'Upload a screenshot of the student QR, or paste the token — live camera needs HTTPS or localhost.',
+                        'Upload a screenshot of the wallet load QR, or paste the token — live camera needs HTTPS or localhost.',
                         true
                     );
                     return;

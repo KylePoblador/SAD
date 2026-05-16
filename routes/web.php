@@ -92,6 +92,18 @@ Route::post('/admin/coupons', [AdminController::class, 'storeCoupon'])
 Route::patch('/admin/coupons/{coupon}', [AdminController::class, 'updateCoupon'])
     ->middleware(['auth', 'verified'])
     ->name('admin.coupons.update');
+Route::get('/admin/reports', [AdminController::class, 'reports'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.reports');
+
+Route::get('/admin/users/{user}/edit', [AdminController::class, 'editUser'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.users.edit');
+
+Route::patch('/admin/users/{user}', [AdminController::class, 'updateUser'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin.users.update');
+
 Route::post('/admin/users/{user}/inactive-label', [AdminController::class, 'toggleInactiveLabel'])
     ->middleware(['auth', 'verified'])
     ->name('admin.users.inactive.toggle');
@@ -139,9 +151,7 @@ Route::get('/student/dashboard', [StudentController::class, 'index'])
 Route::post('/student/orders/{orderId}/feedback', [StudentController::class, 'submitFeedback'])
     ->middleware(['auth', 'verified'])
     ->name('student.feedback.submit');
-Route::post('/student/orders/{order}/qr', [StudentController::class, 'generateOrderQr'])
-    ->middleware(['auth', 'verified'])
-    ->name('student.order.qr');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -164,9 +174,7 @@ Route::get('/student/orders/{order}/receipt', [StudentController::class, 'orderR
 Route::get('/student/wallet', [StudentController::class, 'wallet'])
     ->middleware(['auth', 'verified'])
     ->name('student.wallet');
-Route::get('/student/wallet/receipts/{receipt}', [StudentController::class, 'showWalletReceipt'])
-    ->middleware(['auth', 'verified'])
-    ->name('student.wallet.receipts.show');
+
 
 Route::get('/student/refunds', [RefundController::class, 'studentPage'])
     ->middleware(['auth', 'verified'])
@@ -283,9 +291,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/qr-scanner', [DashboardController::class, 'qrScanner'])->name('staff.qr.scanner');
     Route::get('/staff/wallet-load/{token}', [DashboardController::class, 'walletLoadQrConfirm'])->name('staff.wallet-load.confirm');
     Route::post('/staff/wallet-load/{token}/consume', [DashboardController::class, 'walletLoadQrConsume'])->name('staff.wallet-load.consume');
-    Route::get('/staff/qr/{token}', [DashboardController::class, 'qrConfirm'])->name('staff.qr.confirm');
 
-    Route::post('/staff/qr/{token}/consume', [DashboardController::class, 'qrConsume'])->name('staff.qr.consume');
     Route::get('/staff/orders/{order}', [DashboardController::class, 'orderDetail'])->name('staff.order.detail');
     Route::patch('/staff/orders/{order}/status', [DashboardController::class, 'updateOrderStatus'])->name('staff.orders.status');
     Route::get('/staff/notification', [DashboardController::class, 'notification'])->name('staff.notification');

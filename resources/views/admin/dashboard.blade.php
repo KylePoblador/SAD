@@ -46,34 +46,65 @@
         @include('admin.partials.transactions-table', ['transactions' => $recentTransactions])
     </div>
 
-    <div class="rounded-xl bg-white p-4 shadow-sm">
-        <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Users (students & staff)</h2>
-            <a href="{{ route('admin.users') }}" class="text-sm font-medium text-indigo-600 hover:underline">Manage users</a>
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Recent Students</h2>
+                <a href="{{ route('admin.users', ['role' => 'student']) }}" class="text-sm font-medium text-indigo-600 hover:underline">Manage students</a>
+            </div>
+            <div class="space-y-2 text-sm">
+                @foreach($latestStudents as $u)
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                        <div>
+                            <a href="{{ route('admin.users.show', $u->id) }}" class="font-medium text-indigo-600 hover:underline">{{ $u->name }}</a>
+                            <p class="text-xs text-gray-500">{{ $u->email }} · Last active: {{ $u->last_active_at ? $u->last_active_at->format('M d, Y H:i') : 'Never' }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            @if($u->is_auto_inactive || $u->is_inactive)
+                                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Inactive</span>
+                            @endif
+                            <a href="{{ route('admin.users.show', $u->id) }}" class="rounded bg-indigo-100 px-2 py-1 text-xs font-semibold text-indigo-800 hover:bg-indigo-200">View details</a>
+                            <form method="post" action="{{ route('admin.users.inactive.toggle', $u->id) }}">
+                                @csrf
+                                <input type="hidden" name="is_inactive" value="{{ $u->is_inactive ? 0 : 1 }}">
+                                <button type="submit" class="rounded bg-gray-800 px-2 py-1 text-xs font-semibold text-white hover:bg-gray-900">
+                                    {{ $u->is_inactive ? 'Clear' : 'Label inactive' }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
         </div>
-        <div class="space-y-2 text-sm">
-            @foreach($latestUsers as $u)
-                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2">
-                    <div>
-                        <a href="{{ route('admin.users.show', $u->id) }}" class="font-medium text-indigo-600 hover:underline">{{ $u->name }}</a>
-                        <p class="text-xs text-gray-500">{{ $u->email }} · Last active: {{ $u->last_active_at ? $u->last_active_at->format('M d, Y H:i') : 'Never' }}</p>
+
+        <div class="rounded-xl bg-white p-4 shadow-sm">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Recent Staff</h2>
+                <a href="{{ route('admin.users', ['role' => 'staff']) }}" class="text-sm font-medium text-indigo-600 hover:underline">Manage staff</a>
+            </div>
+            <div class="space-y-2 text-sm">
+                @foreach($latestStaff as $u)
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                        <div>
+                            <a href="{{ route('admin.users.show', $u->id) }}" class="font-medium text-indigo-600 hover:underline">{{ $u->name }}</a>
+                            <p class="text-xs text-gray-500">{{ $u->email }} · Last active: {{ $u->last_active_at ? $u->last_active_at->format('M d, Y H:i') : 'Never' }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            @if($u->is_auto_inactive || $u->is_inactive)
+                                <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Inactive</span>
+                            @endif
+                            <a href="{{ route('admin.users.show', $u->id) }}" class="rounded bg-indigo-100 px-2 py-1 text-xs font-semibold text-indigo-800 hover:bg-indigo-200">View details</a>
+                            <form method="post" action="{{ route('admin.users.inactive.toggle', $u->id) }}">
+                                @csrf
+                                <input type="hidden" name="is_inactive" value="{{ $u->is_inactive ? 0 : 1 }}">
+                                <button type="submit" class="rounded bg-gray-800 px-2 py-1 text-xs font-semibold text-white hover:bg-gray-900">
+                                    {{ $u->is_inactive ? 'Clear' : 'Label inactive' }}
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        @if($u->is_auto_inactive || $u->is_inactive)
-                            <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Inactive</span>
-                        @endif
-                        <span class="rounded bg-gray-100 px-2 py-0.5 text-xs uppercase">{{ $u->role }}</span>
-                        <a href="{{ route('admin.users.show', $u->id) }}" class="rounded bg-indigo-100 px-2 py-1 text-xs font-semibold text-indigo-800 hover:bg-indigo-200">View details</a>
-                        <form method="post" action="{{ route('admin.users.inactive.toggle', $u->id) }}">
-                            @csrf
-                            <input type="hidden" name="is_inactive" value="{{ $u->is_inactive ? 0 : 1 }}">
-                            <button type="submit" class="rounded bg-gray-800 px-2 py-1 text-xs font-semibold text-white hover:bg-gray-900">
-                                {{ $u->is_inactive ? 'Clear label' : 'Label inactive' }}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            @endforeach
+                @endforeach
+            </div>
         </div>
     </div>
 @endsection

@@ -32,7 +32,7 @@ class MenuItem extends Model
             return null;
         }
         if (Storage::disk('public')->exists($this->image_path)) {
-            return Storage::disk('public')->url($this->image_path);
+            return asset('storage/' . $this->image_path);
         }
 
         return asset($this->image_path);

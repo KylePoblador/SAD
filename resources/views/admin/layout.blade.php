@@ -17,6 +17,8 @@
             <nav class="flex flex-wrap gap-2 text-sm">
                 <a href="{{ route('admin.dashboard') }}"
                    class="rounded-lg px-3 py-1.5 font-medium {{ request()->routeIs('admin.dashboard') ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">Dashboard</a>
+                <a href="{{ route('admin.reports') }}"
+                   class="rounded-lg px-3 py-1.5 font-medium {{ request()->routeIs('admin.reports') ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">Reports</a>
                 <a href="{{ route('admin.transactions') }}"
                    class="rounded-lg px-3 py-1.5 font-medium {{ request()->routeIs('admin.transactions') ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">Transactions</a>
                 <a href="{{ route('admin.users') }}"

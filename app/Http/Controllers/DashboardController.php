@@ -6,8 +6,7 @@ use App\Models\ActivityNotification;
 use App\Models\CanteenFeedback;
 use App\Models\MenuItem;
 use App\Models\Order;
-use App\Models\PaymentReceipt;
-use App\Models\QrPaymentToken;
+
 use App\Models\SeatLayout;
 use App\Models\UserCanteenBalance;
 use App\Models\WalletLoadLog;
@@ -88,66 +87,7 @@ class DashboardController extends Controller
         return view('Staff.quickaction.qr-scanner');
     }
 
-    public function qrConfirm(string $token)
-    {
-        if (strtolower(trim((string) (Auth::user()->role ?? ''))) !== 'staff') {
-            abort(403);
-        }
-        $entry = QrPaymentToken::query()
-            ->where('token', $token)
-            ->with('order.user')
-            ->firstOrFail();
-        if ($entry->expires_at->isPast()) {
-            return redirect()->route('staff.qr.scanner')->with('error', 'QR token expired.');
-        }
 
-        return view('Staff.quickaction.qr-confirm', [
-            'entry' => $entry,
-            'order' => $entry->order,
-        ]);
-    }
-
-    public function qrConsume(Request $request, string $token)
-    {
-        if (strtolower(trim((string) (Auth::user()->role ?? ''))) !== 'staff') {
-            abort(403);
-        }
-        $entry = QrPaymentToken::query()
-            ->where('token', $token)
-            ->with('order')
-            ->firstOrFail();
-        if ($entry->consumed_at !== null) {
-            return redirect()->route('staff.qr.scanner')->with('status', 'QR already used.');
-        }
-        if ($entry->expires_at->isPast()) {
-            return redirect()->route('staff.qr.scanner')->with('error', 'QR token expired.');
-        }
-
-        DB::transaction(function () use ($entry) {
-            $entry->update([
-                'consumed_at' => now(),
-                'consumed_by_user_id' => Auth::id(),
-            ]);
-            if ($entry->order) {
-                $entry->order->update(['status' => 'completed']);
-                if (DB::getSchemaBuilder()->hasTable('payment_receipts')) {
-                    PaymentReceipt::query()->firstOrCreate(
-                        ['order_id' => $entry->order->id],
-                        [
-                            'user_id' => (int) $entry->order->user_id,
-                            'qr_payment_token_id' => $entry->id,
-                            'receipt_number' => 'RCPT-'.now()->format('Ymd').'-'.strtoupper(Str::random(6)),
-                            'canteen_id' => (string) ($entry->order->canteen_id ?? ''),
-                            'amount' => (float) ($entry->order->payable_total ?? $entry->order->total ?? 0),
-                            'paid_at' => now(),
-                        ]
-                    );
-                }
-            }
-        });
-
-        return redirect()->route('staff.qr.scanner')->with('status', 'Order payment verified and completed.');
-    }
 
     public function walletLoadQrConfirm(string $token)
     {
