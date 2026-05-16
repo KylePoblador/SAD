@@ -61,10 +61,16 @@
                     <span class="text-gray-500">Customer</span>
                     <span class="text-right text-gray-900">{{ $studentName }}</span>
                 </div>
+                @if(!empty($seatReservation))
                 <div class="flex justify-between gap-4">
-                    <span class="text-gray-500">Status</span>
-                    <span class="font-medium capitalize text-gray-900">{{ $order->status }}</span>
+                    <span class="text-gray-500">Seat</span>
+                    <span class="font-semibold text-gray-900">No. {{ $seatReservation->seat_number }}</span>
                 </div>
+                <div class="flex justify-between gap-4">
+                    <span class="text-gray-500">Seat code</span>
+                    <span class="font-mono font-bold tracking-widest text-indigo-700">{{ $seatReservation->share_code }}</span>
+                </div>
+                @endif
             </div>
 
             <hr class="my-4 border-gray-100">

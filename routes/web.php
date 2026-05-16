@@ -175,6 +175,18 @@ Route::get('/student/wallet', [StudentController::class, 'wallet'])
     ->middleware(['auth', 'verified'])
     ->name('student.wallet');
 
+Route::get('/student/transactions', [StudentController::class, 'transactions'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.transactions');
+
+Route::get('/student/transactions/receipt/wallet-load/{id}', [StudentController::class, 'walletLoadReceipt'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.transactions.wallet-load-receipt');
+
+Route::get('/student/transactions/receipt/coin-transfer/{id}', [StudentController::class, 'coinTransferReceipt'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.transactions.coin-transfer-receipt');
+
 
 Route::get('/student/refunds', [RefundController::class, 'studentPage'])
     ->middleware(['auth', 'verified'])
@@ -325,6 +337,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/staff/reports', [DashboardController::class, 'reports'])->name('staff.reports');
     Route::get('/staff/reports/print', [DashboardController::class, 'reportsPrint'])->name('staff.reports.print');
+    Route::get('/staff/reports/download', [DashboardController::class, 'reportsDownload'])->name('staff.reports.download');
 
     /*
     |--------------------------------------------------------------------------

@@ -54,6 +54,13 @@
                 <p class="mt-3 text-xs text-amber-950/85">Pay cash at the counter, then show this QR so staff can scan and credit your wallet.</p>
                 <p class="mt-2 text-[11px] text-amber-900/70">Works with the staff <strong>QR scanner</strong> app screen.</p>
             </div>
+
+            {{-- Fallback token code --}}
+            <div class="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-center">
+                <p class="mb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Backup token code</p>
+                <p class="font-mono text-xl font-bold tracking-[0.25em] text-gray-800 select-all">{{ $entry->token }}</p>
+                <p class="mt-1 text-[10px] text-gray-400">If QR can't be scanned, give this code to staff to enter manually.</p>
+            </div>
         </div>
     </div>
 </body>

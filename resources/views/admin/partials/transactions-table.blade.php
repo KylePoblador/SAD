@@ -33,7 +33,11 @@
                     </td>
                     <td class="px-3 py-2">
                         @if($tx->counterparty)
-                            <a href="{{ route('admin.users.show', $tx->counterparty->id) }}" class="text-indigo-600 hover:underline">{{ $tx->counterparty->name }}</a>
+                            @if($tx->counterparty->id)
+                                <a href="{{ route('admin.users.show', $tx->counterparty->id) }}" class="text-indigo-600 hover:underline">{{ $tx->counterparty->name }}</a>
+                            @else
+                                <span class="font-medium text-gray-800">{{ $tx->counterparty->name }}</span>
+                            @endif
                             <p class="text-xs text-gray-500">{{ ucfirst($tx->counterparty->role) }}</p>
                         @else
                             <span class="text-gray-400">—</span>

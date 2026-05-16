@@ -20,11 +20,19 @@
             class="mb-3 w-full rounded-lg border border-gray-200 bg-white py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
             Upload QR image (screenshot / gallery)
         </button>
-        <label for="qr-token" class="mb-2 block text-xs font-semibold text-gray-600">Or paste token manually</label>
-        <input id="qr-token" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" placeholder="QR token">
-        <button id="btn-open-token" type="button" class="mt-3 w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white">
-            Open confirmation
+
+        {{-- Collapsible manual token fallback --}}
+        <button id="btn-toggle-manual" type="button"
+            class="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100">
+            ▼ Enter token manually (if QR can't be scanned)
         </button>
+        <div id="manual-token-section" class="hidden mt-3 space-y-2">
+            <label for="qr-token" class="block text-xs font-semibold text-gray-600">Paste token here</label>
+            <input id="qr-token" type="text" class="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono tracking-widest" placeholder="e.g. ABC123XYZ456">
+            <button id="btn-open-token" type="button" class="w-full rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white">
+                Open confirmation
+            </button>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
@@ -66,7 +74,9 @@
                 const raw = String(decodedText || '').trim();
                 const input = document.getElementById('qr-token');
                 if (input) input.value = raw;
-                setHelp('QR detected. Tap "Open confirmation".', false);
+                setHelp('QR detected! Redirecting...', false);
+                // Auto-redirect immediately after scan
+                openToken();
             }
 
             function openToken() {
@@ -191,6 +201,17 @@
             document.getElementById('btn-open-token')?.addEventListener('click', openToken);
             document.getElementById('btn-upload-qr')?.addEventListener('click', function () {
                 document.getElementById('qr-file-input')?.click();
+            });
+            document.getElementById('btn-toggle-manual')?.addEventListener('click', function () {
+                const section = document.getElementById('manual-token-section');
+                const btn = this;
+                if (section.classList.contains('hidden')) {
+                    section.classList.remove('hidden');
+                    btn.textContent = '▲ Hide manual token entry';
+                } else {
+                    section.classList.add('hidden');
+                    btn.textContent = '▼ Enter token manually (if QR can\'t be scanned)';
+                }
             });
             document.getElementById('qr-file-input')?.addEventListener('change', function (ev) {
                 const file = ev.target.files && ev.target.files[0];

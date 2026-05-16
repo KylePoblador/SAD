@@ -88,13 +88,27 @@ class InAppNotificationFeed
 
     public static function staffUnreadCount(int $staffUserId): int
     {
-        $since = User::query()->whereKey($staffUserId)->value('notification_feed_cleared_at');
+        $user = User::query()->whereKey($staffUserId)->first();
+        $since = $user?->notification_feed_cleared_at;
+        $collegeCode = $user?->college ? strtolower(trim((string) $user->college)) : null;
 
-        return ActivityNotification::query()
+        $activityCount = ActivityNotification::query()
             ->where('user_id', $staffUserId)
             ->whereNull('read_at')
             ->when($since, fn ($q) => $q->where('created_at', '>', $since))
             ->count();
+
+        $orderCount = 0;
+        if ($collegeCode) {
+            $orderCount = Order::query()
+                ->whereRaw('LOWER(TRIM(canteen_id)) = ?', [$collegeCode])
+                ->where('status', 'pending')
+                ->where('is_read', false)
+                ->when($since, fn ($q) => $q->where('created_at', '>', $since))
+                ->count();
+        }
+
+        return $activityCount + $orderCount;
     }
 
     public static function markStudentRead(int $userId, string $nid): void
@@ -279,6 +293,7 @@ class InAppNotificationFeed
             ActivityNotification::TYPE_FRIEND_ACCEPTED => route('student.friends.index', [], false),
             ActivityNotification::TYPE_SEAT_RESERVED,
             ActivityNotification::TYPE_SEAT_RELEASED => route('student.dashboard', [], false),
+            ActivityNotification::TYPE_ORDER_STATUS => route('student.orders', [], false),
             default => route('student.notification', [], false),
         };
     }
@@ -287,6 +302,8 @@ class InAppNotificationFeed
     {
         return match ($n->type) {
             ActivityNotification::TYPE_DEPOSIT_INQUIRY_STAFF => route('staff.wallet', [], false),
+            ActivityNotification::TYPE_NEW_ORDER             => route('staff.orders', [], false),
+            ActivityNotification::TYPE_ORDER_CANCELLED       => route('staff.orders', ['status' => 'cancelled'], false),
             default => route('staff.notification', [], false),
         };
     }

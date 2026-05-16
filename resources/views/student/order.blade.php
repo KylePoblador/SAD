@@ -1,3 +1,4 @@
+@php use App\Models\UserCanteenBalance; @endphp
 <x-layouts.student title="My orders" active="orders">
     @if (session('status') === 'order-placed')
         <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
@@ -17,13 +18,7 @@
             {{ session('status') }}
         </div>
     @endif
-    @if (session('status') === 'qr-generated' && session('qr_token'))
-        <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-            <p class="font-semibold">QR generated for {{ session('qr_order') }}</p>
-            <p class="mt-1 text-xs">Let staff scan this token:</p>
-            <code class="mt-2 block rounded bg-white px-2 py-1 text-xs">{{ session('qr_token') }}</code>
-        </div>
-    @endif
+
 
     @if (session('error'))
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
@@ -92,6 +87,15 @@
                         <p class="text-sm font-semibold text-gray-800">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
                         <p class="text-xs text-gray-500">{{ $order->canteen }}</p>
                         <p class="text-xs text-gray-500">Mode: {{ strtoupper(str_replace('_', ' ', $order->order_mode ?? 'dine_in')) }}</p>
+                        @php
+                            $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
+                            $seatRes = $seatReservations[$cid] ?? null;
+                        @endphp
+                        @if($seatRes)
+                            <p class="mt-0.5 text-xs font-semibold text-indigo-700">
+                                Seat {{ $seatRes->seat_number }} · Code: <span class="font-mono tracking-widest">{{ $seatRes->share_code }}</span>
+                            </p>
+                        @endif
                         <p class="text-xs text-gray-400">{{ $order->created_at->format('M d, Y H:i') }}</p>
                     </div>
                     @if ($order->status == 'ready')
@@ -147,15 +151,7 @@
                             class="inline-flex items-center rounded-full bg-gray-100 px-3 py-2 text-xs font-medium text-gray-800 transition hover:bg-gray-200">
                             View receipt
                         </a>
-                        @if ($order->status !== 'completed')
-                            <form method="post" action="{{ route('student.order.qr', $order) }}">
-                                @csrf
-                                <button type="submit"
-                                    class="inline-flex items-center rounded-full bg-indigo-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-indigo-700">
-                                    Generate pay QR
-                                </button>
-                            </form>
-                        @endif
+
                         @if ($order->status == 'ready')
                             <span
                                 class="rounded-full bg-green-600 px-3 py-2 text-xs font-medium text-white">Pick up at counter</span>

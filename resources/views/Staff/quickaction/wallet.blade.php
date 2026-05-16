@@ -32,7 +32,7 @@
         <div class="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
                 <h2 class="text-lg font-bold text-gray-900">Recent loads</h2>
-                <p class="mt-1 text-xs text-gray-500">Latest wallet credits at this canteen (up to 100).</p>
+                <p class="mt-1 text-xs text-gray-500">{{ $historyList->count() }} wallet credit{{ $historyList->count() !== 1 ? 's' : '' }} at this canteen.</p>
             </div>
             <button type="button" onclick="openWalletHistoryModal()"
                 class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-100">

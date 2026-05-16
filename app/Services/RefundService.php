@@ -16,8 +16,8 @@ class RefundService
         User $student,
         float $amount,
         string $reason,
-        string $transactionType = null,
-        int $transactionId = null
+        ?string $transactionType = null,
+        ?int $transactionId = null
     ): Refund {
         if ($staff->role !== 'staff') {
             throw new \InvalidArgumentException('Only staff members can issue refunds');

@@ -334,10 +334,16 @@ class StudentController extends Controller
         $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
         $canteenLabel = $labels[$cid] ?? strtoupper((string) $order->canteen_id);
 
+        $seatReservation = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$cid])
+            ->where('user_id', auth()->id())
+            ->first();
+
         return view('student.orders.receipt', [
-            'order' => $order,
-            'canteenLabel' => $canteenLabel,
-            'studentName' => auth()->user()->name,
+            'order'           => $order,
+            'canteenLabel'    => $canteenLabel,
+            'studentName'     => auth()->user()->name,
+            'seatReservation' => $seatReservation,
         ]);
     }
     public function orders()
@@ -367,11 +373,18 @@ class StudentController extends Controller
 
         $walletBalance = UserCanteenBalance::totalForUser((int) auth()->id());
 
+        // Fetch seat reservations keyed by college for quick lookup in the view
+        $seatReservations = DB::table('seat_reservations')
+            ->where('user_id', auth()->id())
+            ->get()
+            ->keyBy(fn ($r) => UserCanteenBalance::normalizedCollege((string) $r->college));
+
         return view('student.order', [
-            'orders' => $orders,
-            'walletBalance' => $walletBalance,
+            'orders'            => $orders,
+            'walletBalance'     => $walletBalance,
             'activeOrdersCount' => $orders->whereIn('status', ['pending', 'preparing', 'ready'])->count(),
-            'totalOrdersCount' => $orders->count(),
+            'totalOrdersCount'  => $orders->count(),
+            'seatReservations'  => $seatReservations,
         ]);
     }
 
@@ -385,13 +398,14 @@ class StudentController extends Controller
         $totalOrders = $orders->count();
 
         $recentTransactions = $orders->sortByDesc('created_at')
-            ->take(10)
+            ->take(20)
             ->map(function ($order) {
                 return [
                     'description' => 'Order '.$order->order_number,
                     'amount' => $order->total,
                     'type' => 'debit',
                     'date' => $order->created_at->format('M d, Y H:i'),
+                    'order_id' => $order->id,
                 ];
             })
             ->values()
@@ -404,7 +418,7 @@ class StudentController extends Controller
                     $q->where('sender_user_id', $user->id)->orWhere('receiver_user_id', $user->id);
                 })
                 ->latest()
-                ->take(10)
+                ->take(20)
                 ->get()
                 ->map(function (CoinTransfer $transfer) use ($user) {
                     $isSender = (int) $transfer->sender_user_id === (int) $user->id;
@@ -420,10 +434,29 @@ class StudentController extends Controller
                 ->toArray();
         }
 
+        $walletLoadTransactions = [];
+        if (Schema::hasTable('wallet_load_logs')) {
+            $walletLoadTransactions = \App\Models\WalletLoadLog::query()
+                ->where('student_user_id', $user->id)
+                ->latest()
+                ->take(20)
+                ->get()
+                ->map(function ($log) {
+                    return [
+                        'description' => 'Wallet loaded · '.strtoupper($log->college),
+                        'amount' => (float) $log->amount,
+                        'type' => 'credit',
+                        'date' => $log->created_at->format('M d, Y H:i'),
+                    ];
+                })
+                ->toArray();
+        }
+
         $recentTransactions = collect($recentTransactions)
             ->merge($transferTransactions)
+            ->merge($walletLoadTransactions)
             ->sortByDesc(fn ($row) => strtotime((string) $row['date']))
-            ->take(12)
+            ->take(5)
             ->values()
             ->toArray();
 
@@ -480,6 +513,133 @@ class StudentController extends Controller
         ]);
     }
 
+    public function transactions(Request $request)
+    {
+        $user = auth()->user();
+        $type = $request->query('type', 'all');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
+
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+
+        // Orders
+        $orderQ = Order::where('user_id', $user->id)->with('items');
+        if ($dateFrom) $orderQ->whereDate('created_at', '>=', $dateFrom);
+        if ($dateTo)   $orderQ->whereDate('created_at', '<=', $dateTo);
+        $orders = ($type === 'all' || $type === 'order') ? $orderQ->latest()->get() : collect();
+
+        // Wallet loads
+        $walletQ = \App\Models\WalletLoadLog::where('student_user_id', $user->id);
+        if ($dateFrom) $walletQ->whereDate('created_at', '>=', $dateFrom);
+        if ($dateTo)   $walletQ->whereDate('created_at', '<=', $dateTo);
+        $walletLoads = ($type === 'all' || $type === 'wallet_load') && Schema::hasTable('wallet_load_logs')
+            ? $walletQ->latest()->get() : collect();
+
+        // Coin transfers
+        $coinQ = Schema::hasTable('coin_transfers')
+            ? CoinTransfer::where(function ($q) use ($user) {
+                $q->where('sender_user_id', $user->id)->orWhere('receiver_user_id', $user->id);
+              })->with(['sender', 'receiver'])
+            : null;
+        if ($coinQ && $dateFrom) $coinQ->whereDate('created_at', '>=', $dateFrom);
+        if ($coinQ && $dateTo)   $coinQ->whereDate('created_at', '<=', $dateTo);
+        $coinTransfers = ($type === 'all' || $type === 'coin_transfer') && $coinQ
+            ? $coinQ->latest()->get() : collect();
+
+        // Merge all into unified list
+        $transactions = collect();
+
+        foreach ($orders as $order) {
+            $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
+            $transactions->push([
+                'type'        => 'order',
+                'type_label'  => 'Canteen Order',
+                'badge'       => 'blue',
+                'flow'        => 'debit',
+                'description' => 'Order ' . ($order->order_number ?? '#' . $order->id),
+                'sub'         => $labels[$cid] ?? strtoupper($cid),
+                'amount'      => (float) $order->total,
+                'date'        => $order->created_at,
+                'receipt_url' => route('student.orders.receipt', $order->id),
+            ]);
+        }
+
+        foreach ($walletLoads as $log) {
+            $cid = UserCanteenBalance::normalizedCollege((string) $log->college);
+            $transactions->push([
+                'type'        => 'wallet_load',
+                'type_label'  => 'Wallet Load',
+                'badge'       => 'green',
+                'flow'        => 'credit',
+                'description' => 'Wallet loaded · ' . ($labels[$cid] ?? strtoupper($cid)),
+                'sub'         => 'by staff',
+                'amount'      => (float) $log->amount,
+                'date'        => $log->created_at,
+                'receipt_url' => route('student.transactions.wallet-load-receipt', $log->id),
+            ]);
+        }
+
+        foreach ($coinTransfers as $transfer) {
+            $isSender = (int) $transfer->sender_user_id === (int) $user->id;
+            $peer = $isSender ? $transfer->receiver : $transfer->sender;
+            $cid = UserCanteenBalance::normalizedCollege((string) ($transfer->college ?? ''));
+            $transactions->push([
+                'type'        => 'coin_transfer',
+                'type_label'  => 'Coin Transfer',
+                'badge'       => 'purple',
+                'flow'        => $isSender ? 'debit' : 'credit',
+                'description' => ($isSender ? 'Sent to ' : 'Received from ') . ($peer->name ?? 'user'),
+                'sub'         => $transfer->note ?: ($labels[$cid] ?? strtoupper($cid)),
+                'amount'      => (float) $transfer->amount,
+                'date'        => $transfer->created_at,
+                'receipt_url' => route('student.transactions.coin-transfer-receipt', $transfer->id),
+            ]);
+        }
+
+        $transactions = $transactions->sortByDesc(fn ($r) => $r['date']->timestamp)->values();
+
+        return view('student.transactions.index', [
+            'transactions' => $transactions,
+            'type'         => $type,
+            'dateFrom'     => $dateFrom,
+            'dateTo'       => $dateTo,
+        ]);
+    }
+
+    public function walletLoadReceipt(int $id)
+    {
+        $log = \App\Models\WalletLoadLog::findOrFail($id);
+        if ((int) $log->student_user_id !== (int) auth()->id()) abort(403);
+
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+        $cid = UserCanteenBalance::normalizedCollege((string) $log->college);
+
+        return view('student.transactions.wallet-load-receipt', [
+            'log'          => $log,
+            'canteenLabel' => $labels[$cid] ?? strtoupper($cid),
+            'studentName'  => auth()->user()->name,
+        ]);
+    }
+
+    public function coinTransferReceipt(int $id)
+    {
+        $transfer = CoinTransfer::with(['sender', 'receiver'])->findOrFail($id);
+        if ((int) $transfer->sender_user_id !== (int) auth()->id()
+            && (int) $transfer->receiver_user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
+        $isSender = (int) $transfer->sender_user_id === (int) auth()->id();
+        $labels = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+        $cid = UserCanteenBalance::normalizedCollege((string) ($transfer->college ?? ''));
+
+        return view('student.transactions.coin-transfer-receipt', [
+            'transfer'     => $transfer,
+            'isSender'     => $isSender,
+            'canteenLabel' => $labels[$cid] ?? strtoupper($cid),
+        ]);
+    }
+
     /**
      * Canteens that have at least one staff account (same rule as student browse list).
      *
@@ -533,7 +693,7 @@ class StudentController extends Controller
             'user_id' => $request->user()->id,
             'college' => $slug,
             'amount' => $validated['amount'],
-            'token' => Str::random(48),
+            'token' => strtoupper(Str::random(12)),
             'expires_at' => now()->addMinutes(30),
         ]);
 
@@ -1090,14 +1250,20 @@ class StudentController extends Controller
             ->values()
             ->all();
 
+        $myReservation = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->first();
+
         return view('student.reservation.reserve', [
-            'college' => $collegeNorm,
-            'occupied' => $fullSeats,
+            'college'        => $collegeNorm,
+            'occupied'       => $fullSeats,
             'seatCapacities' => $seatCapacities,
-            'seatCounts' => $seatCounts,
-            'totalSeats' => $seatCapacities->sum(),
-            'occupiedCount' => $seatCounts->sum(),
+            'seatCounts'     => $seatCounts,
+            'totalSeats'     => $seatCapacities->sum(),
+            'occupiedCount'  => $seatCounts->sum(),
             'availableCount' => max($seatCapacities->sum() - $seatCounts->sum(), 0),
+            'myReservation'  => $myReservation,
         ]);
     }
 
@@ -1277,12 +1443,27 @@ class StudentController extends Controller
         session()->forget('checkout_coupon_' . $collegeNorm);
 
         $canteenLabel = config('canteens')[$collegeNorm]['label'] ?? $collegeNorm;
+        $student = auth()->user();
+        $itemSummary = collect($validatedLines ?? [])
+            ->map(fn ($r) => $r['qty'] . '× ' . $r['menu']->name)
+            ->join(', ');
+
+        // Notify the student about their seat
         \App\Models\ActivityNotification::notifyUser(
             auth()->id(),
             \App\Models\ActivityNotification::TYPE_SEAT_RESERVED,
             'Seat reserved',
-            'Seat #'.$seatNumber.' at '.$canteenLabel.'.',
+            'Seat #' . $seatNumber . ' at ' . $canteenLabel . '.',
             null
+        );
+
+        // Notify all staff of this canteen about the new order
+        \App\Models\ActivityNotification::notifyStaffOfCollege(
+            $collegeNorm,
+            \App\Models\ActivityNotification::TYPE_NEW_ORDER,
+            'New order — ' . ($placedOrder->order_number ?? '#' . $placedOrder->id),
+            $student->name . ' · Seat #' . $seatNumber . ' · ₱' . number_format($placedOrder->total, 2) . ($itemSummary ? ' · ' . $itemSummary : ''),
+            $placedOrder->id
         );
 
         return redirect()->route('student.orders')

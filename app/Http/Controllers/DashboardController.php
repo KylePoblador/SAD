@@ -370,6 +370,23 @@ class DashboardController extends Controller
 
         $order->update(['status' => $new]);
 
+        // Notify the student about the status change
+        $statusMessages = [
+            'preparing' => ['Preparing your order', 'Your order is being prepared. It will be ready soon!'],
+            'ready'     => ['Order ready for pickup!', 'Your order is ready. Please pick it up at the counter.'],
+            'completed' => ['Order completed', 'Your order has been completed. Thank you!'],
+        ];
+        if (isset($statusMessages[$new])) {
+            [$title, $body] = $statusMessages[$new];
+            ActivityNotification::notifyUser(
+                $order->user_id,
+                ActivityNotification::TYPE_ORDER_STATUS,
+                $title,
+                ($order->order_number ?? 'Order') . ' — ' . $body,
+                $order->id
+            );
+        }
+
         if ($request->input('from') === 'detail') {
             return redirect()
                 ->route('staff.order.detail', $order)
@@ -712,6 +729,73 @@ class DashboardController extends Controller
     public function reportsPrint(Request $request)
     {
         return view('Staff.quickaction.reports-print', $this->buildReportData($request));
+    }
+
+    public function reportsDownload(Request $request)
+    {
+        $data = $this->buildReportData($request);
+        $from = $data['from'] ?? 'all';
+        $to   = $data['to']   ?? 'all';
+        $canteen = strtolower(str_replace(' ', '_', $data['canteenName']));
+        $filename = "report_{$canteen}_{$from}_to_{$to}.csv";
+
+        $headers = [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($data) {
+            $out = fopen('php://output', 'w');
+
+            // Summary
+            fputcsv($out, ['REPORT SUMMARY']);
+            fputcsv($out, ['Canteen', $data['canteenName']]);
+            fputcsv($out, ['Period', ($data['from'] ?? 'All') . ' to ' . ($data['to'] ?? 'All')]);
+            fputcsv($out, ['Total Income (₱)', number_format($data['totalIncome'], 2)]);
+            fputcsv($out, ['Successful Orders', $data['successfulOrdersCount']]);
+            fputcsv($out, ['Cancelled Orders', $data['cancelledOrdersCount']]);
+            fputcsv($out, ['Cancelled Amount (₱)', number_format($data['cancelledAmount'], 2)]);
+            fputcsv($out, []);
+
+            // Top Items
+            fputcsv($out, ['TOP SELLING ITEMS']);
+            fputcsv($out, ['Item', 'Qty Sold', 'Revenue (₱)']);
+            foreach ($data['topItems'] as $item) {
+                fputcsv($out, [$item->name, (int) $item->sold, number_format((float) $item->total, 2)]);
+            }
+            fputcsv($out, []);
+
+            // Successful Orders
+            fputcsv($out, ['SUCCESSFUL ORDERS']);
+            fputcsv($out, ['Order #', 'Customer', 'Date', 'Items (qty)', 'Total (₱)']);
+            foreach ($data['successfulOrders'] as $order) {
+                fputcsv($out, [
+                    $order->order_number ?? 'ORD-' . $order->id,
+                    $order->user->name ?? 'Student',
+                    $order->created_at?->format('Y-m-d H:i'),
+                    (int) $order->items->sum('qty'),
+                    number_format((float) $order->total, 2),
+                ]);
+            }
+            fputcsv($out, []);
+
+            // Cancelled Orders
+            fputcsv($out, ['CANCELLED ORDERS']);
+            fputcsv($out, ['Order #', 'Customer', 'Date', 'Items (qty)', 'Amount (₱)']);
+            foreach ($data['cancelledOrders'] as $order) {
+                fputcsv($out, [
+                    $order->order_number ?? 'ORD-' . $order->id,
+                    $order->user->name ?? 'Student',
+                    $order->created_at?->format('Y-m-d H:i'),
+                    (int) $order->items->sum('qty'),
+                    number_format((float) $order->total, 2),
+                ]);
+            }
+
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     /**

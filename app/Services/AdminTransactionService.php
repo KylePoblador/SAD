@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\CoinTransfer;
 use App\Models\Order;
-use App\Models\PaymentReceipt;
+
 use App\Models\Refund;
 use App\Models\User;
 use App\Models\WalletLoadLog;
@@ -46,9 +46,7 @@ class AdminTransactionService
         if (! $type || $type === 'refund') {
             $items = $items->merge($this->mapRefunds($role, $userId));
         }
-        if (! $type || $type === 'payment') {
-            $items = $items->merge($this->mapPayments($role, $userId));
-        }
+
 
         return $items->sortByDesc(fn ($row) => $row->occurred_at?->timestamp ?? 0)->values();
     }
@@ -79,6 +77,8 @@ class AdminTransactionService
     /** @return Collection<int, object> */
     private function mapOrders(?string $role, ?int $userId): Collection
     {
+        $catalog = collect(config('canteens', []))->mapWithKeys(fn ($c, $k) => [$k => $c['label']]);
+
         return Order::query()
             ->with('user:id,name,email,role,college')
             ->when($userId, fn ($q) => $q->where('user_id', $userId))
@@ -87,19 +87,27 @@ class AdminTransactionService
             ->latest()
             ->limit(400)
             ->get()
-            ->map(fn (Order $order) => (object) [
-                'key' => 'order-'.$order->id,
-                'type' => 'order',
-                'type_label' => 'Canteen order',
-                'source_id' => $order->id,
-                'occurred_at' => $order->created_at,
-                'amount' => (float) ($order->payable_total ?? $order->total ?? 0),
-                'status' => $order->status,
-                'reference' => $order->order_number,
-                'description' => 'Order #'.($order->order_number ?? $order->id),
-                'user' => $order->user,
-                'counterparty' => null,
-            ]);
+            ->map(function (Order $order) use ($catalog) {
+                $cid = strtolower(trim((string) $order->canteen_id));
+                $canteenLabel = $catalog[$cid] ?? strtoupper((string) $order->canteen_id);
+                return (object) [
+                    'key'          => 'order-'.$order->id,
+                    'type'         => 'order',
+                    'type_label'   => 'Canteen order',
+                    'source_id'    => $order->id,
+                    'occurred_at'  => $order->created_at,
+                    'amount'       => (float) ($order->payable_total ?? $order->total ?? 0),
+                    'status'       => $order->status,
+                    'reference'    => $order->order_number,
+                    'description'  => 'Order #'.($order->order_number ?? $order->id),
+                    'user'         => $order->user,
+                    'counterparty' => (object) [
+                        'id'   => null,
+                        'name' => $canteenLabel,
+                        'role' => 'Canteen',
+                    ],
+                ];
+            });
     }
 
     /** @return Collection<int, object> */
@@ -183,36 +191,5 @@ class AdminTransactionService
             ]);
     }
 
-    /** @return Collection<int, object> */
-    private function mapPayments(?string $role, ?int $userId): Collection
-    {
-        if (! Schema::hasTable('payment_receipts')) {
-            return collect();
-        }
-
-        return PaymentReceipt::query()
-            ->when($userId, fn ($q) => $q->where('user_id', $userId))
-            ->when($role, fn ($q) => $q->whereIn('user_id', User::query()->where('role', $role)->select('id')))
-            ->latest()
-            ->limit(400)
-            ->get()
-            ->map(function (PaymentReceipt $receipt) {
-                $user = User::query()->select(['id', 'name', 'email', 'role', 'college'])->find($receipt->user_id);
-
-                return (object) [
-                    'key' => 'payment-'.$receipt->id,
-                    'type' => 'payment',
-                    'type_label' => 'Payment receipt',
-                    'source_id' => $receipt->id,
-                    'occurred_at' => $receipt->paid_at ?? $receipt->created_at,
-                    'amount' => (float) $receipt->amount,
-                    'status' => 'paid',
-                    'reference' => $receipt->receipt_number,
-                    'description' => 'Receipt #'.($receipt->receipt_number ?? $receipt->id),
-                    'user' => $user,
-                    'counterparty' => null,
-                ];
-            })
-            ->filter(fn ($row) => $row->user && in_array($row->user->role, ['student', 'staff'], true));
-    }
 }
+
