@@ -1061,6 +1061,15 @@ class StudentController extends Controller
         return (int) collect($this->getCartLines($collegeNorm))->sum(fn ($l) => (int) ($l['qty'] ?? 0));
     }
 
+    protected function findAvailableMenuItem(int $menuItemId, string $collegeNorm): ?MenuItem
+    {
+        return MenuItem::query()
+            ->whereKey($menuItemId)
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('is_available', true)
+            ->first();
+    }
+
     public function reserveSeatForm(string $college)
     {
         $collegeNorm = UserCanteenBalance::normalizedCollege((string) $college);

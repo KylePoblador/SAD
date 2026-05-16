@@ -78,7 +78,7 @@
             @endfor
         </div>
 
-        <form action="{{ route('student.confirm.seat') }}" method="POST" class="mt-8">
+        <form action="{{ route('student.confirm-seat') }}" method="POST" class="mt-8">
             @csrf
             <input type="hidden" name="college" value="{{ $college }}">
             <input type="hidden" name="seat" id="seatInput">
