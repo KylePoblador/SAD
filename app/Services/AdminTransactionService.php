@@ -168,7 +168,7 @@ class AdminTransactionService
     private function mapRefunds(?string $role, ?int $userId): Collection
     {
         return Refund::query()
-            ->with(['student:id,name,email,role,college', 'staff:id,name,email,role,college'])
+            ->with(['student:id,name,email,role,college', 'staff:id,name,email,role,college', 'order:id,order_number'])
             ->when($userId, fn ($q) => $q->where(fn ($inner) => $inner
                 ->where('student_user_id', $userId)->orWhere('staff_user_id', $userId)))
             ->when($role === 'student', fn ($q) => $q->whereHas('student', fn ($uq) => $uq->where('role', 'student')))
@@ -183,8 +183,8 @@ class AdminTransactionService
                 'source_id' => $refund->id,
                 'occurred_at' => $refund->refunded_at ?? $refund->created_at,
                 'amount' => (float) $refund->amount,
-                'status' => 'completed',
-                'reference' => $refund->related_transaction_type,
+                'status' => $refund->status ?? 'refunded',
+                'reference' => $refund->order_id ? 'Order #'.($refund->order?->order_number ?? $refund->order_id) : $refund->related_transaction_type,
                 'description' => $refund->reason,
                 'user' => $refund->student,
                 'counterparty' => $refund->staff,

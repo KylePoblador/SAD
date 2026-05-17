@@ -93,33 +93,32 @@
                     return;
                 }
 
-                refundList.innerHTML = data.refunds.map(refund => `
-                    <div class="overflow-hidden rounded-lg border border-gray-100 bg-gradient-to-r from-green-50/50 to-emerald-50/50 transition hover:shadow-md">
-                        <div class="p-4">
-                            <div class="flex items-start justify-between">
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                refundList.innerHTML = data.refunds.map(refund => {
+                    const status = refund.status || 'refunded';
+                    const title = status === 'pending'
+                        ? 'Refund pending review'
+                        : status === 'rejected'
+                            ? 'Refund rejected'
+                            : 'Refund from ' + (refund.processed_by?.name || refund.staff?.name || 'staff');
+                    const amountClass = status === 'refunded' ? 'text-green-600' : status === 'rejected' ? 'text-red-500' : 'text-amber-600';
+                    const when = refund.refunded_at || refund.created_at;
+                    return `
+                    <div class="overflow-hidden rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex-1">
+                                <p class="font-semibold text-gray-900">${title}</p>
+                                <p class="text-xs text-gray-600">${refund.reason}</p>
+                                ${refund.order?.order_number ? `<p class="mt-0.5 text-xs text-indigo-600">${refund.order.order_number}</p>` : ''}
+                                ${refund.staff_notes ? `<p class="mt-1 text-xs text-red-600">${refund.staff_notes}</p>` : ''}
+                            </div>
+                            <div class="text-right shrink-0">
+                                <p class="text-xl font-bold ${amountClass}">${status === 'refunded' ? '+' : ''}₱${parseFloat(refund.amount).toFixed(2)}</p>
+                                <span class="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${status === 'pending' ? 'bg-amber-100 text-amber-800' : status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">${status}</span>
+                                <p class="mt-1 text-xs text-gray-500">${when ? new Date(when).toLocaleString() : ''}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p class="font-semibold text-gray-900">Refund from ${refund.staff.name}</p>
-                            <p class="text-xs text-gray-600">${refund.reason}</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <p class="text-2xl font-bold text-green-600">+₱${parseFloat(refund.amount).toFixed(2)}</p>
-                    <p class="text-xs text-gray-500">
-                        ${new Date(refund.refunded_at).toLocaleDateString()}
-                        ${new Date(refund.refunded_at).toLocaleTimeString()}
-                    </p>
-                </div>
-            </div>
-        </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             } catch (error) {
                 console.error('Error loading refund history:', error);
                 document.getElementById('refund-list').innerHTML =

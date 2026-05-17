@@ -6,6 +6,7 @@ use App\Models\Refund;
 use App\Models\User;
 use App\Services\RefundService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class RefundController extends Controller
 {
@@ -25,6 +26,7 @@ class RefundController extends Controller
             'student_user_id' => 'required|exists:users,id',
             'amount' => 'required|numeric|min:0.01',
             'reason' => 'required|string|max:255',
+            'canteen_id' => ['nullable', 'string', Rule::in(array_keys(config('canteens', [])))],
             'related_transaction_type' => 'nullable|string',
             'related_transaction_id' => 'nullable|integer',
         ]);
@@ -36,10 +38,11 @@ class RefundController extends Controller
             $refund = $this->refundService->issueRefund(
                 $staff,
                 $student,
-                $request->amount,
+                (float) $request->amount,
                 $request->reason,
                 $request->related_transaction_type,
-                $request->related_transaction_id
+                $request->related_transaction_id ? (int) $request->related_transaction_id : null,
+                $request->canteen_id
             );
 
             return response()->json([
@@ -60,14 +63,18 @@ class RefundController extends Controller
     public function studentHistory($studentId)
     {
         $student = User::findOrFail($studentId);
+        if ((int) auth()->id() !== (int) $student->id && auth()->user()->role !== 'admin') {
+            abort(403);
+        }
+
         $refunds = $this->refundService->getStudentRefundHistory($student);
 
         return response()->json([
             'student_id' => $student->id,
             'student_name' => $student->name,
-            'total_refunds' => $refunds->sum('amount'),
-            'refund_count' => count($refunds),
-            'refunds' => $refunds->load(['staff:id,name']),
+            'total_refunds' => $refunds->where('status', Refund::STATUS_REFUNDED)->sum('amount'),
+            'refund_count' => $refunds->count(),
+            'refunds' => $refunds->load(['staff:id,name', 'processedBy:id,name', 'order:id,order_number']),
         ]);
     }
 
@@ -106,16 +113,47 @@ class RefundController extends Controller
     public function staffHistory()
     {
         $staff = auth()->user();
-        $refunds = $this->refundService->getStaffRefundHistory($staff);
+        $refunds = $this->refundService->getRefundsForStaffCanteen($staff);
         $totalRefunded = $this->refundService->getTotalRefundsByStaff($staff);
+        $pendingCount = $this->refundService->countPendingForStaffCanteen($staff);
 
         return response()->json([
             'staff_id' => $staff->id,
             'staff_name' => $staff->name,
             'total_refunded' => $totalRefunded,
-            'refund_count' => count($refunds),
-            'refunds' => $refunds->load(['student:id,name']),
+            'pending_count' => $pendingCount,
+            'refund_count' => $refunds->count(),
+            'refunds' => $refunds,
         ]);
+    }
+
+    public function process(Request $request, Refund $refund)
+    {
+        $request->validate([
+            'decision' => ['required', Rule::in([Refund::STATUS_REFUNDED, Refund::STATUS_REJECTED])],
+            'staff_notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $processed = $this->refundService->processPendingRefund(
+                $refund,
+                auth()->user(),
+                $request->decision,
+                $request->staff_notes
+            );
+
+            $student = User::find($processed->student_user_id);
+
+            return response()->json([
+                'message' => $request->decision === Refund::STATUS_REFUNDED
+                    ? 'Refund approved and credited to student wallet.'
+                    : 'Refund request rejected.',
+                'refund' => $processed,
+                'student_new_balance' => $student?->fresh()->wallet_balance,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     /**

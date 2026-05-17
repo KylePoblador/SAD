@@ -31,6 +31,10 @@ class ActivityNotification extends Model
 
     public const TYPE_ORDER_STATUS = 'order_status';
 
+    public const TYPE_REFUND_PENDING_STAFF = 'refund_pending_staff';
+
+    public const TYPE_REFUND_DECISION = 'refund_decision';
+
     protected $fillable = [
         'user_id',
         'type',
@@ -66,7 +70,9 @@ class ActivityNotification extends Model
             self::TYPE_SEAT_RELEASED => 'ready',
             self::TYPE_DEPOSIT_INQUIRY_STUDENT,
             self::TYPE_FRIEND_REQUEST => 'preparing',
-            self::TYPE_DEPOSIT_INQUIRY_STAFF => 'pending',
+            self::TYPE_DEPOSIT_INQUIRY_STAFF,
+            self::TYPE_REFUND_PENDING_STAFF => 'pending',
+            self::TYPE_REFUND_DECISION => 'completed',
             default => 'info',
         };
     }
@@ -85,7 +91,9 @@ class ActivityNotification extends Model
             self::TYPE_FRIEND_ACCEPTED => 'users',
             self::TYPE_NEW_ORDER,
             self::TYPE_ORDER_CANCELLED,
-            self::TYPE_ORDER_STATUS => 'bell',
+            self::TYPE_ORDER_STATUS,
+            self::TYPE_REFUND_PENDING_STAFF,
+            self::TYPE_REFUND_DECISION => 'bell',
             default => 'bell',
         };
     }

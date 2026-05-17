@@ -17,7 +17,9 @@ use App\Models\User;
 use App\Models\UserCanteenBalance;
 use App\Models\WalletLoadLog;
 use App\Models\WalletLoadQrToken;
+use App\Models\Refund;
 use App\Services\InAppNotificationFeed;
+use App\Services\OrderCancellationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -323,6 +325,23 @@ class StudentController extends Controller
             ->with('status', 'Thanks — your rating was submitted.');
     }
 
+    public function cancelOrder(Order $order, OrderCancellationService $cancellationService)
+    {
+        if ((int) $order->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
+        try {
+            $cancellationService->cancelByStudent($order, auth()->user());
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('student.orders')->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('student.orders')
+            ->with('status', 'order-cancelled')
+            ->with('order_cancelled_number', $order->order_number ?? 'ORD-'.$order->id);
+    }
+
     public function orderReceipt(Order $order)
     {
         if ((int) $order->user_id !== (int) auth()->id()) {
@@ -353,6 +372,9 @@ class StudentController extends Controller
         $ordersQuery = Order::where('user_id', auth()->id())
             ->with('items')
             ->orderBy('created_at', 'desc');
+        if (Schema::hasTable('refunds') && Schema::hasColumn('refunds', 'order_id')) {
+            $ordersQuery->with('refundRequest');
+        }
         if (Schema::hasColumn('canteen_feedbacks', 'order_id')) {
             $ordersQuery->with('feedback');
         }
@@ -400,9 +422,11 @@ class StudentController extends Controller
         $recentTransactions = $orders->sortByDesc('created_at')
             ->take(20)
             ->map(function ($order) {
+                $payable = (float) ($order->payable_total ?? $order->total ?? 0);
+
                 return [
                     'description' => 'Order '.$order->order_number,
-                    'amount' => $order->total,
+                    'amount' => $payable > 0 ? $payable : (float) $order->total,
                     'type' => 'debit',
                     'date' => $order->created_at->format('M d, Y H:i'),
                     'order_id' => $order->id,
@@ -410,6 +434,31 @@ class StudentController extends Controller
             })
             ->values()
             ->toArray();
+
+        if (Schema::hasTable('refunds')) {
+            $refundRows = Refund::query()
+                ->where('student_user_id', $user->id)
+                ->latest('created_at')
+                ->take(10)
+                ->get()
+                ->map(function (Refund $refund) {
+                    $status = $refund->status ?? Refund::STATUS_REFUNDED;
+                    $label = match ($status) {
+                        Refund::STATUS_PENDING => 'Refund pending',
+                        Refund::STATUS_REJECTED => 'Refund rejected',
+                        default => 'Refund received',
+                    };
+
+                    return [
+                        'description' => $label.' · '.Str::limit($refund->reason, 36),
+                        'amount' => (float) $refund->amount,
+                        'type' => $status === Refund::STATUS_REFUNDED ? 'credit' : 'neutral',
+                        'date' => ($refund->refunded_at ?? $refund->created_at)->format('M d, Y H:i'),
+                    ];
+                })
+                ->toArray();
+            $recentTransactions = collect($recentTransactions)->merge($refundRows)->toArray();
+        }
 
         $transferTransactions = [];
         if (Schema::hasTable('coin_transfers')) {
@@ -526,7 +575,7 @@ class StudentController extends Controller
         $orderQ = Order::where('user_id', $user->id)->with('items');
         if ($dateFrom) $orderQ->whereDate('created_at', '>=', $dateFrom);
         if ($dateTo)   $orderQ->whereDate('created_at', '<=', $dateTo);
-        $orders = ($type === 'all' || $type === 'order') ? $orderQ->latest()->get() : collect();
+        $orders = in_array($type, ['all', 'order', 'order_cancel'], true) ? $orderQ->latest()->get() : collect();
 
         // Wallet loads
         $walletQ = \App\Models\WalletLoadLog::where('student_user_id', $user->id);
@@ -551,17 +600,85 @@ class StudentController extends Controller
 
         foreach ($orders as $order) {
             $cid = UserCanteenBalance::normalizedCollege((string) $order->canteen_id);
-            $transactions->push([
-                'type'        => 'order',
-                'type_label'  => 'Canteen Order',
-                'badge'       => 'blue',
-                'flow'        => 'debit',
-                'description' => 'Order ' . ($order->order_number ?? '#' . $order->id),
-                'sub'         => $labels[$cid] ?? strtoupper($cid),
-                'amount'      => (float) $order->total,
-                'date'        => $order->created_at,
-                'receipt_url' => route('student.orders.receipt', $order->id),
-            ]);
+            $payable = (float) ($order->payable_total ?? $order->total ?? 0);
+            if ($type !== 'order_cancel') {
+                $transactions->push([
+                    'type'        => 'order',
+                    'type_label'  => 'Canteen Order',
+                    'badge'       => 'blue',
+                    'flow'        => 'debit',
+                    'description' => 'Order ' . ($order->order_number ?? '#' . $order->id),
+                    'sub'         => $labels[$cid] ?? strtoupper($cid),
+                    'amount'      => $payable > 0 ? $payable : (float) $order->total,
+                    'date'        => $order->created_at,
+                    'receipt_url' => route('student.orders.receipt', $order->id),
+                ]);
+            }
+
+        }
+
+        if (in_array($type, ['all', 'refund', 'order_cancel'], true) && Schema::hasTable('refunds')) {
+            $refundQ = Refund::query()
+                ->where('student_user_id', $user->id)
+                ->with(['staff:id,name', 'processedBy:id,name', 'order:id,order_number']);
+            if ($dateFrom) {
+                $refundQ->where(function ($q) use ($dateFrom) {
+                    $q->whereDate('created_at', '>=', $dateFrom)
+                        ->orWhereDate('refunded_at', '>=', $dateFrom);
+                });
+            }
+            if ($dateTo) {
+                $refundQ->where(function ($q) use ($dateTo) {
+                    $q->whereDate('created_at', '<=', $dateTo)
+                        ->orWhereDate('refunded_at', '<=', $dateTo);
+                });
+            }
+            foreach ($refundQ->latest('created_at')->get() as $refund) {
+                if ($type === 'order_cancel' && ! $refund->order_id) {
+                    continue;
+                }
+                if ($type === 'refund' && $refund->order_id && ($refund->status ?? '') === Refund::STATUS_PENDING) {
+                    continue;
+                }
+
+                $status = $refund->status ?? Refund::STATUS_REFUNDED;
+                $cid = UserCanteenBalance::normalizedCollege((string) ($refund->canteen_id ?? ''));
+                [$typeLabel, $flow, $description] = match ($status) {
+                    Refund::STATUS_PENDING => [
+                        'Refund Pending',
+                        'pending',
+                        'Cancellation refund · '.($refund->order?->order_number ?? 'order'),
+                    ],
+                    Refund::STATUS_REJECTED => [
+                        'Refund Rejected',
+                        'neutral',
+                        'Refund denied · '.($refund->order?->order_number ?? 'order'),
+                    ],
+                    default => [
+                        $refund->order_id ? 'Order Refunded' : 'Staff Refund',
+                        'credit',
+                        $refund->order_id
+                            ? 'Refund approved · '.($refund->order?->order_number ?? 'order')
+                            : 'Refund from '.($refund->processedBy?->name ?? $refund->staff?->name ?? 'staff'),
+                    ],
+                };
+
+                $transactions->push([
+                    'type'        => $refund->order_id ? 'order_cancel' : 'refund',
+                    'type_label'  => $typeLabel,
+                    'badge'       => 'amber',
+                    'flow'        => $flow,
+                    'description' => $description,
+                    'sub'         => $status === Refund::STATUS_REJECTED
+                        ? ($refund->staff_notes ?: $refund->reason)
+                        : $refund->reason,
+                    'amount'      => (float) $refund->amount,
+                    'date'        => $refund->refunded_at ?? $refund->created_at,
+                    'receipt_url' => $refund->order_id
+                        ? route('student.orders.receipt', $refund->order_id)
+                        : null,
+                ]);
+            }
         }
 
         foreach ($walletLoads as $log) {

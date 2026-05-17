@@ -54,6 +54,17 @@
                 </div>
 
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Canteen</label>
+                    <select name="canteen_id" required
+                        class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+                        <option value="">Select canteen wallet to credit</option>
+                        @foreach (config('canteens', []) as $slug => $canteen)
+                            <option value="{{ $slug }}">{{ $canteen['label'] ?? strtoupper($slug) }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Amount (₱)</label>
                     <input type="number" name="amount" step="0.01" min="0.01" placeholder="0.00"
                         class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
@@ -75,9 +86,22 @@
             </form>
         </div>
 
+        <!-- Pending cancellation refunds -->
+        <div class="rounded-xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm">
+            <div class="mb-1 flex items-center justify-between gap-2">
+                <h2 class="text-lg font-semibold text-gray-800">Pending review</h2>
+                <span id="pending-count"
+                    class="hidden rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">0</span>
+            </div>
+            <p class="mb-4 text-xs text-gray-600">Student-cancelled orders awaiting Refunded or Rejected.</p>
+            <div id="pending-refund-list" class="space-y-3">
+                <p class="text-sm text-gray-500">Loading…</p>
+            </div>
+        </div>
+
         <!-- Refund History -->
         <div class="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <h2 class="mb-4 text-lg font-semibold text-gray-800">Refund History</h2>
+            <h2 class="mb-4 text-lg font-semibold text-gray-800">All refunds</h2>
 
             <div id="refund-list" class="space-y-2">
                 <p class="text-sm text-gray-500">Loading refund history...</p>
@@ -88,43 +112,103 @@
 
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        const processUrlTemplate = @json(url('/staff/refunds/__ID__/process'));
 
-        // Load refund history
+        function statusBadge(status) {
+            if (status === 'pending') return '<span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Pending</span>';
+            if (status === 'rejected') return '<span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Rejected</span>';
+            return '<span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Refunded</span>';
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+        }
+
+        async function processRefund(refundId, decision) {
+            let staffNotes = null;
+            if (decision === 'rejected') {
+                staffNotes = prompt('Reason for rejecting this refund (required):');
+                if (!staffNotes || !staffNotes.trim()) return;
+            } else if (!confirm('Approve this refund and credit the student wallet?')) {
+                return;
+            }
+            try {
+                const response = await fetch(processUrlTemplate.replace('__ID__', refundId), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify({ decision, staff_notes: staffNotes }),
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    await CoinmealDialog.alert({ title: decision === 'refunded' ? 'Refund approved' : 'Refund rejected', message: data.message, variant: 'success', okLabel: 'OK' });
+                    loadRefundHistory();
+                } else {
+                    await CoinmealDialog.alert({ title: 'Could not process', message: data.message || 'Try again.', variant: 'error', okLabel: 'OK' });
+                }
+            } catch (e) { console.error(e); }
+        }
+
         async function loadRefundHistory() {
             try {
                 const response = await fetch('{{ route('staff.refunds.history') }}');
                 const data = await response.json();
 
+                const pendingList = document.getElementById('pending-refund-list');
                 const refundList = document.getElementById('refund-list');
+                const pendingBadge = document.getElementById('pending-count');
+                const pending = (data.refunds || []).filter(r => r.status === 'pending');
+                const processed = (data.refunds || []).filter(r => r.status !== 'pending');
 
-                if (data.refunds.length === 0) {
-                    refundList.innerHTML = '<p class="text-sm text-gray-500">No refunds issued yet.</p>';
+                if (pendingBadge) {
+                    if (pending.length > 0) {
+                        pendingBadge.textContent = String(pending.length);
+                        pendingBadge.classList.remove('hidden');
+                    } else {
+                        pendingBadge.classList.add('hidden');
+                    }
+                }
+
+                pendingList.innerHTML = pending.length === 0
+                    ? '<p class="text-sm text-gray-500">No cancelled orders awaiting review.</p>'
+                    : pending.map(refund => `
+                        <div class="rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
+                            <p class="font-semibold text-gray-900">${refund.student.name}</p>
+                            <p class="text-sm text-gray-600">₱${parseFloat(refund.amount).toFixed(2)} · ${refund.order?.order_number || 'Order'}</p>
+                            <p class="mt-1 text-xs text-gray-500">${refund.reason}</p>
+                            <p class="mt-1 text-xs text-gray-400">Requested ${formatDate(refund.created_at)}</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <button type="button" onclick="processRefund(${refund.id}, 'refunded')" class="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700">Refunded</button>
+                                <button type="button" onclick="processRefund(${refund.id}, 'rejected')" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100">Rejected</button>
+                            </div>
+                        </div>
+                    `).join('');
+
+                if (processed.length === 0) {
+                    refundList.innerHTML = '<p class="text-sm text-gray-500">No processed refunds yet.</p>';
                     return;
                 }
 
-                refundList.innerHTML = data.refunds.map(refund => `
+                refundList.innerHTML = processed.map(refund => `
                     <div class="rounded-lg border border-gray-100 bg-gray-50 p-4">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <p class="font-medium text-gray-900">${refund.student.name}</p>
                                 <p class="text-sm text-gray-600">₱${parseFloat(refund.amount).toFixed(2)}</p>
                                 <p class="mt-1 text-xs text-gray-500">${refund.reason}</p>
-                                <p class="mt-1 text-xs text-gray-400">
-                                    ${new Date(refund.refunded_at).toLocaleDateString()} ${new Date(refund.refunded_at).toLocaleTimeString()}
-                                </p>
+                                ${refund.order?.order_number ? `<p class="mt-0.5 text-xs text-indigo-600">${refund.order.order_number}</p>` : ''}
+                                ${refund.staff_notes ? `<p class="mt-1 text-xs text-red-600">${refund.staff_notes}</p>` : ''}
+                                <p class="mt-1 text-xs text-gray-400">${formatDate(refund.refunded_at || refund.created_at)}</p>
                             </div>
-                            <div class="text-right">
-                                <span class="inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                    Refunded
-                                </span>
-                            </div>
+                            <div class="text-right shrink-0">${statusBadge(refund.status)}</div>
                         </div>
                     </div>
                 `).join('');
             } catch (error) {
                 console.error('Error loading refund history:', error);
-                document.getElementById('refund-list').innerHTML =
-                    '<p class="text-sm text-red-500">Error loading refund history</p>';
+                document.getElementById('refund-list').innerHTML = '<p class="text-sm text-red-500">Error loading refund history</p>';
+                document.getElementById('pending-refund-list').innerHTML = '<p class="text-sm text-red-500">Error loading pending refunds</p>';
             }
         }
 
@@ -201,8 +285,20 @@
                 return;
             }
 
+            const canteenId = document.querySelector('[name="canteen_id"]')?.value;
+            if (!canteenId) {
+                await CoinmealDialog.alert({
+                    title: 'Select a canteen',
+                    message: 'Choose which canteen wallet should receive the refund.',
+                    variant: 'info',
+                    okLabel: 'OK',
+                });
+                return;
+            }
+
             const formData = {
                 student_user_id: parseInt(studentId),
+                canteen_id: canteenId,
                 amount: parseFloat(document.querySelector('[name="amount"]').value),
                 reason: document.querySelector('[name="reason"]').value,
             };

@@ -139,6 +139,10 @@ Route::get('/staff/refunds/history', [RefundController::class, 'staffHistory'])
     ->middleware(['auth', 'verified'])
     ->name('staff.refunds.history');
 
+Route::post('/staff/refunds/{refund}/process', [RefundController::class, 'process'])
+    ->middleware(['auth', 'verified'])
+    ->name('staff.refunds.process');
+
 /*
 |--------------------------------------------------------------------------
 | STUDENT DASHBOARD
@@ -170,6 +174,10 @@ Route::get('/student/orders', [StudentController::class, 'orders'])
 Route::get('/student/orders/{order}/receipt', [StudentController::class, 'orderReceipt'])
     ->middleware(['auth', 'verified'])
     ->name('student.orders.receipt');
+
+Route::post('/student/orders/{order}/cancel', [StudentController::class, 'cancelOrder'])
+    ->middleware(['auth', 'verified'])
+    ->name('student.orders.cancel');
 
 Route::get('/student/wallet', [StudentController::class, 'wallet'])
     ->middleware(['auth', 'verified'])

@@ -1,5 +1,14 @@
 @php use App\Models\UserCanteenBalance; @endphp
 <x-layouts.student title="My orders" active="orders">
+    @if (session('status') === 'order-cancelled')
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p class="font-semibold">Order cancelled</p>
+            <p class="mt-1 text-xs text-amber-800/95">
+                {{ session('order_cancelled_number', 'Your order') }} was cancelled. Canteen staff will review your refund request — you will be notified when it is approved or rejected.
+            </p>
+        </div>
+    @endif
+
     @if (session('status') === 'order-placed')
         <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
             <p class="font-semibold">Order placed for {{ session('order_placed_canteen', 'this canteen') }} only.</p>
@@ -13,7 +22,7 @@
         </div>
     @endif
 
-    @if (session('status') && session('status') !== 'order-placed')
+    @if (session('status') && ! in_array(session('status'), ['order-placed', 'order-cancelled'], true))
         <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-900">
             {{ session('status') }}
         </div>
@@ -81,7 +90,7 @@
 
         @forelse ($orders as $order)
             <div class="order-card mb-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
-                data-status="{{ $order->status == 'completed' ? 'completed' : 'pending' }}">
+                data-status="{{ $order->status === 'completed' ? 'completed' : ($order->status === 'cancelled' ? 'cancelled' : 'pending') }}">
                 <div class="mb-2 flex items-center justify-between">
                     <div>
                         <p class="text-sm font-semibold text-gray-800">{{ $order->order_number ?? 'ORD-' . $order->id }}</p>
@@ -107,6 +116,9 @@
                     @elseif($order->status == 'completed')
                         <span
                             class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Completed</span>
+                    @elseif($order->status === 'cancelled')
+                        <span
+                            class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">Cancelled</span>
                     @else
                         <span
                             class="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-900">Pending</span>
@@ -162,7 +174,28 @@
                                 data-order-label="{{ $order->order_number ?? 'ORD-' . $order->id }}">
                                 Rate & feedback
                             </button>
-                        @elseif($order->status !== 'completed')
+                        @elseif(in_array($order->status, ['pending', 'preparing', 'ready'], true))
+                            <form method="POST" action="{{ route('student.orders.cancel', $order) }}"
+                                class="cancel-order-form inline"
+                                data-order-label="{{ $order->order_number ?? 'ORD-' . $order->id }}">
+                                @csrf
+                                <button type="submit"
+                                    class="rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100">
+                                    Cancel order
+                                </button>
+                            </form>
+                        @elseif($order->status === 'cancelled')
+                            @php $refundStatus = $order->refundRequest?->status; @endphp
+                            @if ($refundStatus === 'pending')
+                                <span class="rounded-full bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Refund pending</span>
+                            @elseif ($refundStatus === 'rejected')
+                                <span class="rounded-full bg-red-100 px-3 py-2 text-xs font-semibold text-red-800">Refund rejected</span>
+                            @elseif ($refundStatus === 'refunded')
+                                <span class="rounded-full bg-green-100 px-3 py-2 text-xs font-semibold text-green-800">Refunded</span>
+                            @else
+                                <span class="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-600">Cancelled</span>
+                            @endif
+                        @elseif(! in_array($order->status, ['completed', 'cancelled'], true))
                             <span class="rounded-full bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600">Tracking</span>
                         @endif
                     </div>
@@ -340,6 +373,15 @@
                         modal.classList.add('hidden');
                         modal.classList.remove('flex');
                     }
+                });
+
+                document.querySelectorAll('.cancel-order-form').forEach(form => {
+                    form.addEventListener('submit', function(e) {
+                        const label = form.getAttribute('data-order-label') || 'this order';
+                        if (!confirm('Cancel ' + label + '? Staff will review your refund request before any amount is returned.')) {
+                            e.preventDefault();
+                        }
+                    });
                 });
             });
         </script>

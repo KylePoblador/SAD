@@ -27,6 +27,8 @@
                 <option value="order"        {{ $type === 'order'         ? 'selected' : '' }}>Canteen Orders</option>
                 <option value="wallet_load"  {{ $type === 'wallet_load'   ? 'selected' : '' }}>Wallet Loads</option>
                 <option value="coin_transfer"{{ $type === 'coin_transfer' ? 'selected' : '' }}>Coin Transfers</option>
+                <option value="refund"        {{ $type === 'refund'         ? 'selected' : '' }}>Staff Refunds</option>
+                <option value="order_cancel"  {{ $type === 'order_cancel'   ? 'selected' : '' }}>Cancelled Orders</option>
             </select>
         </div>
         <div class="flex gap-2">
@@ -52,6 +54,7 @@
             $badgeClass = match($tx['badge']) {
                 'green'  => 'bg-emerald-100 text-emerald-700',
                 'purple' => 'bg-violet-100 text-violet-700',
+                'amber'  => 'bg-amber-100 text-amber-800',
                 default  => 'bg-blue-100 text-blue-700',
             };
         @endphp
@@ -64,6 +67,10 @@
                         </span>
                         @if($tx['flow'] === 'credit')
                             <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700">Credit</span>
+                        @elseif($tx['flow'] === 'pending')
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending</span>
+                        @elseif($tx['flow'] === 'neutral')
+                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600">No credit</span>
                         @else
                             <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">Debit</span>
                         @endif
