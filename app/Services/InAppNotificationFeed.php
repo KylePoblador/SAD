@@ -294,6 +294,8 @@ class InAppNotificationFeed
             ActivityNotification::TYPE_SEAT_RESERVED,
             ActivityNotification::TYPE_SEAT_RELEASED => route('student.dashboard', [], false),
             ActivityNotification::TYPE_ORDER_STATUS => route('student.orders', [], false),
+            ActivityNotification::TYPE_ORDER_CANCELLED,
+            ActivityNotification::TYPE_REFUND_DECISION => route('student.refunds', [], false),
             default => route('student.notification', [], false),
         };
     }
@@ -304,6 +306,7 @@ class InAppNotificationFeed
             ActivityNotification::TYPE_DEPOSIT_INQUIRY_STAFF => route('staff.wallet', [], false),
             ActivityNotification::TYPE_NEW_ORDER             => route('staff.orders', [], false),
             ActivityNotification::TYPE_ORDER_CANCELLED       => route('staff.orders', ['status' => 'cancelled'], false),
+            ActivityNotification::TYPE_REFUND_PENDING_STAFF  => route('staff.refunds', [], false),
             default => route('staff.notification', [], false),
         };
     }

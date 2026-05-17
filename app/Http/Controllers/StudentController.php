@@ -924,7 +924,7 @@ class StudentController extends Controller
     public function setOrderMode(Request $request, string $college)
     {
         $collegeNorm = UserCanteenBalance::normalizedCollege($college);
-        
+
         $validated = $request->validate([
             'mode' => ['required', 'string', 'in:dine_in,takeout'],
         ]);
@@ -1270,11 +1270,11 @@ class StudentController extends Controller
             if (! is_array($lines) || $lines === [] || ! isset($catalog[$slug])) {
                 continue;
             }
-            
+
             $subtotal = (float) collect($lines)->sum(fn ($l) => (float) ($l['price'] ?? 0) * (int) ($l['qty'] ?? 0));
             $orderMode = session('canteen_mode_' . $slug) ?? 'dine_in';
             $walletBalance = UserCanteenBalance::balanceFor((int) auth()->id(), $slug);
-            
+
             // Check seat reservation for dine_in
             $seatReservation = DB::table('seat_reservations')
                 ->whereRaw('LOWER(TRIM(college)) = ?', [$slug])
@@ -1341,7 +1341,7 @@ class StudentController extends Controller
                     $payable = $total;
                     $couponId = null;
                     $discount = 0.0;
-                    
+
                     $couponSessionKey = 'checkout_coupon_' . $slug;
                     if (session()->has($couponSessionKey) && Schema::hasTable('coupons')) {
                         $couponCode = session($couponSessionKey);
@@ -1411,7 +1411,7 @@ class StudentController extends Controller
                     }
 
                     $this->putCartLines($slug, []);
-                    
+
                     $placedOrders[] = [
                         'order' => $order->fresh(),
                         'slug' => $slug,
