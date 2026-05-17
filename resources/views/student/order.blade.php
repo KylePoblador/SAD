@@ -376,10 +376,18 @@
                 });
 
                 document.querySelectorAll('.cancel-order-form').forEach(form => {
-                    form.addEventListener('submit', function(e) {
+                    form.addEventListener('submit', async function(e) {
+                        e.preventDefault();
                         const label = form.getAttribute('data-order-label') || 'this order';
-                        if (!confirm('Cancel ' + label + '? Staff will review your refund request before any amount is returned.')) {
-                            e.preventDefault();
+                        const ok = await CoinmealDialog.confirm({
+                            title: 'Cancel ' + label + '?',
+                            message: 'Staff will review your refund request before any amount is returned to your wallet.',
+                            variant: 'danger',
+                            confirmLabel: 'Yes, cancel order',
+                            cancelLabel: 'Keep order',
+                        });
+                        if (ok) {
+                            form.submit();
                         }
                     });
                 });

@@ -1347,6 +1347,27 @@ class StudentController extends Controller
             ->first();
     }
 
+    public function cancelSeat(string $college)
+    {
+        $collegeNorm = UserCanteenBalance::normalizedCollege($college);
+        if (! array_key_exists($collegeNorm, config('canteens', []))) {
+            abort(404);
+        }
+
+        $deleted = DB::table('seat_reservations')
+            ->whereRaw('LOWER(TRIM(college)) = ?', [$collegeNorm])
+            ->where('user_id', auth()->id())
+            ->delete();
+
+        if ($deleted) {
+            return redirect()->route('student.canteen', $collegeNorm)
+                ->with('success', 'Your seat reservation has been cancelled.');
+        }
+
+        return redirect()->route('student.canteen', $collegeNorm)
+            ->with('error', 'No seat reservation found to cancel.');
+    }
+
     public function reserveSeatForm(string $college)
     {
         $collegeNorm = UserCanteenBalance::normalizedCollege((string) $college);

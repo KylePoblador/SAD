@@ -1,9 +1,41 @@
 @php
     $categories = $menuItems->pluck('category')->unique()->filter()->values();
+    $orderMode = session('canteen_mode_' . $college);
 @endphp
 
 <x-layouts.student :title="$canteenName" active="home">
     <div class="space-y-4 sm:space-y-5">
+        @if (session('success'))
+            <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-900">
+                {{ session('success') }}
+            </div>
+        @endif
+        @if (session('error'))
+            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
+                {{ session('error') }}
+            </div>
+        @endif
+        {{-- Mode of Order status bar --}}
+        @if ($orderMode)
+            <div class="flex items-center justify-between rounded-2xl border {{ $orderMode === 'dine_in' ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50' }} px-4 py-3 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">{{ $orderMode === 'dine_in' ? '🍽️' : '🛍️' }}</span>
+                    <div>
+                        <p class="text-[10px] font-bold uppercase tracking-widest {{ $orderMode === 'dine_in' ? 'text-green-600' : 'text-amber-600' }}">Mode of Order</p>
+                        <p class="text-sm font-bold {{ $orderMode === 'dine_in' ? 'text-green-900' : 'text-amber-900' }}">{{ $orderMode === 'dine_in' ? 'Dine-in' : 'Takeout' }}</p>
+                    </div>
+                </div>
+                <button type="button" id="cancel-mode-btn"
+                    class="flex h-8 w-8 items-center justify-center rounded-full {{ $orderMode === 'dine_in' ? 'bg-green-200/80 text-green-800 hover:bg-green-300' : 'bg-amber-200/80 text-amber-800 hover:bg-amber-300' }} text-sm font-bold transition"
+                    title="Change order mode">
+                    ✕
+                </button>
+            </div>
+            <form id="cancel-mode-form" action="{{ route('student.canteen', $college) }}" method="get" class="hidden">
+                <input type="hidden" name="change_mode" value="1">
+            </form>
+        @endif
+
         {{-- Page header --}}
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -51,9 +83,17 @@
             <div class="min-w-0 flex-1">
                 <p class="text-sm font-bold text-gray-900">Seat availability</p>
                 @if ($hasReservedSeat)
-                    <div class="mt-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
-                        Reserved seat: <strong>{{ $reservedSeat }}</strong>
+                    <div class="mt-2 flex items-center justify-between gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+                        <span>Reserved seat: <strong>{{ $reservedSeat }}</strong></span>
+                        <button type="button" id="cancel-seat-btn"
+                            class="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                            title="Cancel seat reservation">
+                            Cancel seat
+                        </button>
                     </div>
+                    <form id="cancel-seat-form" action="{{ route('student.cancel-seat', $college) }}" method="post" class="hidden">
+                        @csrf
+                    </form>
                 @endif
                 @if (session('seat'))
                     <div class="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
@@ -265,6 +305,34 @@
                     btn.disabled = false;
                 }
             }
+
+            // Cancel mode of order confirmation
+            document.getElementById('cancel-mode-btn')?.addEventListener('click', async function () {
+                const ok = await CoinmealDialog.confirm({
+                    title: 'Change order mode?',
+                    message: 'You will be taken back to choose between Dine-in or Takeout. Your cart items will be kept.',
+                    variant: 'danger',
+                    confirmLabel: 'Yes, change mode',
+                    cancelLabel: 'Keep current',
+                });
+                if (ok) {
+                    document.getElementById('cancel-mode-form').submit();
+                }
+            });
+
+            // Cancel seat reservation confirmation
+            document.getElementById('cancel-seat-btn')?.addEventListener('click', async function () {
+                const ok = await CoinmealDialog.confirm({
+                    title: 'Cancel seat reservation?',
+                    message: 'Your reserved seat will be released and made available for other students.',
+                    variant: 'danger',
+                    confirmLabel: 'Yes, cancel seat',
+                    cancelLabel: 'Keep seat',
+                });
+                if (ok) {
+                    document.getElementById('cancel-seat-form').submit();
+                }
+            });
         </script>
     @endpush
 </x-layouts.student>

@@ -366,6 +366,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/student/cart/{college}/checkout', [StudentController::class, 'cartCheckout'])->name('student.cart.checkout');
 
     Route::get('/student/reserve/{college}', [StudentController::class, 'reserveSeatForm'])->name('student.reserve');
+    Route::post('/student/cancel-seat/{college}', [StudentController::class, 'cancelSeat'])->name('student.cancel-seat');
     Route::post('/student/confirm-seat', [StudentController::class, 'reserveSeatConfirm'])->name('student.confirm-seat');
 });
 

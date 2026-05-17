@@ -129,10 +129,25 @@
         async function processRefund(refundId, decision) {
             let staffNotes = null;
             if (decision === 'rejected') {
-                staffNotes = prompt('Reason for rejecting this refund (required):');
-                if (!staffNotes || !staffNotes.trim()) return;
-            } else if (!confirm('Approve this refund and credit the student wallet?')) {
-                return;
+                staffNotes = await CoinmealDialog.prompt({
+                    title: 'Reject this refund?',
+                    message: 'The student will NOT receive any money back. Please provide a reason for the rejection.',
+                    placeholder: 'Reason for rejecting this refund…',
+                    variant: 'danger',
+                    confirmLabel: 'Reject refund',
+                    cancelLabel: 'Go back',
+                    required: true,
+                });
+                if (!staffNotes) return;
+            } else {
+                const ok = await CoinmealDialog.confirm({
+                    title: 'Approve this refund?',
+                    message: 'The refund amount will be credited back to the student\'s canteen wallet.',
+                    variant: 'primary',
+                    confirmLabel: 'Yes, approve refund',
+                    cancelLabel: 'Cancel',
+                });
+                if (!ok) return;
             }
             try {
                 const response = await fetch(processUrlTemplate.replace('__ID__', refundId), {

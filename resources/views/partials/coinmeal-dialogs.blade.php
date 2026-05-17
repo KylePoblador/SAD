@@ -20,6 +20,12 @@
                 <p id="coinmeal-dialog-message"
                     class="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-600"></p>
 
+                <div id="coinmeal-dialog-input-wrap" class="mt-4 hidden">
+                    <textarea id="coinmeal-dialog-input"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        rows="3" placeholder=""></textarea>
+                </div>
+
                 <div id="coinmeal-dialog-actions-confirm"
                     class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                     <button type="button" id="coinmeal-dialog-cancel"
@@ -198,6 +204,7 @@
                         mode = 'confirm';
                         titleEl.textContent = title;
                         messageEl.textContent = message;
+                        document.getElementById('coinmeal-dialog-input-wrap').classList.add('hidden');
                         btnCancel.textContent = cancelLabel;
                         btnConfirm.textContent = confirmLabel;
                         applyConfirmVariant(variant);
@@ -219,12 +226,54 @@
                         mode = 'alert';
                         titleEl.textContent = title || (variant === 'error' ? 'Something went wrong' : 'Notice');
                         messageEl.textContent = message;
+                        document.getElementById('coinmeal-dialog-input-wrap').classList.add('hidden');
                         btnOk.textContent = okLabel;
                         applyAlertVariant(variant);
                         confirmActions.classList.add('hidden');
                         alertActions.classList.remove('hidden');
                         show();
                         btnOk.focus();
+                    });
+                },
+                prompt: function (opts) {
+                    opts = opts || {};
+                    const title = opts.title || 'Input required';
+                    const message = opts.message || '';
+                    const placeholder = opts.placeholder || '';
+                    const confirmLabel = opts.confirmLabel || 'Submit';
+                    const cancelLabel = opts.cancelLabel || 'Cancel';
+                    const variant = opts.variant || 'primary';
+                    const required = opts.required !== false;
+
+                    var inputWrap = document.getElementById('coinmeal-dialog-input-wrap');
+                    var inputEl = document.getElementById('coinmeal-dialog-input');
+
+                    return new Promise(function (resolve) {
+                        resolver = function (ok) {
+                            var val = ok ? (inputEl.value || '').trim() : null;
+                            if (ok && required && !val) {
+                                inputEl.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+                                inputEl.focus();
+                                return;
+                            }
+                            inputWrap.classList.add('hidden');
+                            inputEl.value = '';
+                            inputEl.classList.remove('border-rose-400', 'ring-2', 'ring-rose-100');
+                            resolve(val);
+                        };
+                        mode = 'confirm';
+                        titleEl.textContent = title;
+                        messageEl.textContent = message;
+                        inputEl.placeholder = placeholder;
+                        inputEl.value = '';
+                        inputWrap.classList.remove('hidden');
+                        btnCancel.textContent = cancelLabel;
+                        btnConfirm.textContent = confirmLabel;
+                        applyConfirmVariant(variant);
+                        confirmActions.classList.remove('hidden');
+                        alertActions.classList.add('hidden');
+                        show();
+                        inputEl.focus();
                     });
                 },
             };

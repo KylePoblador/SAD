@@ -42,6 +42,18 @@
                     Give this code to your friends. They enter it on this page to join your seat (if there's still room).
                 </p>
             </div>
+            <form id="cancel-seat-form-page" action="{{ route('student.cancel-seat', $college) }}" method="post" class="mt-4 text-center"
+                data-coinmeal-confirm="Your reserved seat will be released and made available for other students."
+                data-coinmeal-confirm-title="Cancel seat reservation?"
+                data-coinmeal-confirm-variant="danger"
+                data-coinmeal-confirm-ok="Yes, cancel seat"
+                data-coinmeal-confirm-cancel="Keep seat">
+                @csrf
+                <button type="submit"
+                    class="inline-flex min-h-[44px] w-full touch-manipulation items-center justify-center rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 sm:w-auto">
+                    Cancel seat reservation
+                </button>
+            </form>
         </div>
     @endif
 
