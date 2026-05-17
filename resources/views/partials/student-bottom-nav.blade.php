@@ -9,6 +9,12 @@
             ? 'flex flex-col items-center text-xs font-semibold text-green-600'
             : 'flex flex-col items-center text-xs text-gray-400';
     };
+    $bottomCartCount = 0;
+    foreach (session('student_carts', []) as $_lines) {
+        if (is_array($_lines)) {
+            $bottomCartCount += (int) collect($_lines)->sum(fn ($l) => (int) ($l['qty'] ?? 0));
+        }
+    }
 @endphp
 
 <div
@@ -16,7 +22,12 @@
     <a href="{{ route('student.dashboard') }}" class="{{ $navItem('home') }}">
         Home
     </a>
-
+    <a href="{{ route('student.cart.hub') }}" class="{{ $navItem('cart') }} relative">
+        Cart
+        @if ($bottomCartCount > 0)
+            <span class="absolute -right-2 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-600 text-[8px] font-bold text-white">{{ $bottomCartCount > 99 ? '99+' : $bottomCartCount }}</span>
+        @endif
+    </a>
     <a href="{{ route('student.orders') }}" class="{{ $navItem('orders') }}">
         Orders
     </a>

@@ -364,6 +364,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/student/cart/{college}/qty', [StudentController::class, 'cartSetQty'])->name('student.cart.qty');
     Route::post('/student/cart/{college}/remove', [StudentController::class, 'cartRemoveItem'])->name('student.cart.remove');
     Route::post('/student/cart/{college}/checkout', [StudentController::class, 'cartCheckout'])->name('student.cart.checkout');
+    Route::post('/student/cart-checkout-all', [StudentController::class, 'cartCheckoutAll'])->name('student.cart.checkout-all');
 
     Route::get('/student/reserve/{college}', [StudentController::class, 'reserveSeatForm'])->name('student.reserve');
     Route::post('/student/cancel-seat/{college}', [StudentController::class, 'cancelSeat'])->name('student.cancel-seat');

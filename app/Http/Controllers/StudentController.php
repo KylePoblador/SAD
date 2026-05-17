@@ -114,6 +114,18 @@ class StudentController extends Controller
             return redirect()->route('student.canteen', $collegeNorm);
         }
 
+        // Auto-clear stale mode if the cart for this canteen is empty.
+        // This handles the case where the student already placed their order but the
+        // session key wasn't cleared (e.g. edge cases or a previous session).
+        $existingMode = session('canteen_mode_' . $collegeNorm);
+        if ($existingMode) {
+            $carts = session('student_carts', []);
+            $cartLines = $carts[$collegeNorm] ?? [];
+            if (empty($cartLines)) {
+                session()->forget('canteen_mode_' . $collegeNorm);
+            }
+        }
+
         $orderMode = session('canteen_mode_' . $collegeNorm);
         if (!$orderMode) {
             return view('student.canteen.mode', [
@@ -927,6 +939,8 @@ class StudentController extends Controller
         $catalog = config('canteens', []);
         $carts = session('student_carts', []);
         $cards = [];
+        $grandTotal = 0.0;
+        $grandCount = 0;
 
         foreach ($carts as $slug => $lines) {
             if (! is_array($lines) || $lines === [] || ! isset($catalog[$slug])) {
@@ -934,20 +948,33 @@ class StudentController extends Controller
             }
             $subtotal = (float) collect($lines)->sum(fn ($l) => (float) ($l['price'] ?? 0) * (int) ($l['qty'] ?? 0));
             $count = (int) collect($lines)->sum(fn ($l) => (int) ($l['qty'] ?? 0));
-            $cards[] = [
-                'college' => $slug,
-                'label' => $catalog[$slug]['label'],
-                'count' => $count,
-                'subtotal' => $subtotal,
-            ];
-        }
+            $orderMode = session('canteen_mode_' . $slug) ?? 'dine_in';
+            $walletBalance = UserCanteenBalance::balanceFor((int) auth()->id(), $slug);
+            $seatReservation = DB::table('seat_reservations')
+                ->whereRaw('LOWER(TRIM(college)) = ?', [$slug])
+                ->where('user_id', auth()->id())
+                ->first();
 
-        if (count($cards) === 1) {
-            return redirect()->route('student.cart', ['college' => $cards[0]['college']]);
+            $cards[] = [
+                'college'         => $slug,
+                'label'           => $catalog[$slug]['label'],
+                'count'           => $count,
+                'subtotal'        => $subtotal,
+                'lines'           => $lines,
+                'orderMode'       => $orderMode,
+                'walletBalance'   => $walletBalance,
+                'hasReservedSeat' => $seatReservation !== null,
+                'reservedSeat'    => $seatReservation?->seat_number ?? null,
+                'canCheckout'     => $walletBalance + 0.001 >= $subtotal,
+            ];
+            $grandTotal += $subtotal;
+            $grandCount += $count;
         }
 
         return view('student.cart.hub', [
-            'carts' => $cards,
+            'carts'      => $cards,
+            'grandTotal' => $grandTotal,
+            'grandCount' => $grandCount,
         ]);
     }
 
@@ -1203,11 +1230,240 @@ class StudentController extends Controller
 
         $catalog = config('canteens', []);
         $canteenLabel = $catalog[$collegeNorm]['label'] ?? strtoupper($collegeNorm);
+        $student = auth()->user();
+        $itemSummary = $placedOrder->items->map(fn ($r) => $r->qty . '× ' . $r->name)->join(', ');
+
+        // Notify all staff of this canteen about the new order
+        \App\Models\ActivityNotification::notifyStaffOfCollege(
+            $collegeNorm,
+            \App\Models\ActivityNotification::TYPE_NEW_ORDER,
+            'New order — ' . ($placedOrder->order_number ?? '#' . $placedOrder->id),
+            $student->name . ' · Takeout · ₱' . number_format($placedOrder->total, 2) . ($itemSummary ? ' · ' . $itemSummary : ''),
+            $placedOrder->id
+        );
+
+        // Notify student
+        \App\Models\ActivityNotification::notifyUser(
+            auth()->id(),
+            \App\Models\ActivityNotification::TYPE_ORDER_STATUS,
+            'Order placed',
+            'Your takeout order at ' . $canteenLabel . ' has been successfully placed.',
+            $placedOrder->id
+        );
+
+        session()->forget('canteen_mode_' . $collegeNorm);
 
         return redirect()->route('student.orders')
             ->with('status', 'order-placed')
             ->with('order_placed_canteen', $canteenLabel)
             ->with('order_placed_id', $placedOrder->id);
+    }
+
+    public function cartCheckoutAll(Request $request)
+    {
+        $catalog = config('canteens', []);
+        $carts = session('student_carts', []);
+        $activeCarts = [];
+
+        // Identify non-empty carts and validate them
+        foreach ($carts as $slug => $lines) {
+            if (! is_array($lines) || $lines === [] || ! isset($catalog[$slug])) {
+                continue;
+            }
+            
+            $subtotal = (float) collect($lines)->sum(fn ($l) => (float) ($l['price'] ?? 0) * (int) ($l['qty'] ?? 0));
+            $orderMode = session('canteen_mode_' . $slug) ?? 'dine_in';
+            $walletBalance = UserCanteenBalance::balanceFor((int) auth()->id(), $slug);
+            
+            // Check seat reservation for dine_in
+            $seatReservation = DB::table('seat_reservations')
+                ->whereRaw('LOWER(TRIM(college)) = ?', [$slug])
+                ->where('user_id', auth()->id())
+                ->first();
+
+            $canteenName = $catalog[$slug]['label'] ?? strtoupper($slug);
+
+            if ($walletBalance + 0.001 < $subtotal) {
+                return back()->withErrors(['checkout' => "Insufficient balance in {$canteenName}. Please top up before checking out."]);
+            }
+
+            if ($orderMode === 'dine_in' && ! $seatReservation) {
+                return back()->withErrors(['checkout' => "Please reserve a seat for {$canteenName} or change the mode to Takeout before placing all orders."]);
+            }
+
+            $activeCarts[] = [
+                'college' => $slug,
+                'canteenName' => $canteenName,
+                'lines' => $lines,
+                'subtotal' => $subtotal,
+                'orderMode' => $orderMode,
+                'seatNumber' => $seatReservation?->seat_number ?? null,
+            ];
+        }
+
+        if ($activeCarts === []) {
+            return back()->withErrors(['checkout' => 'All your carts are empty.']);
+        }
+
+        $placedOrders = [];
+
+        try {
+            DB::transaction(function () use ($activeCarts, &$placedOrders) {
+                foreach ($activeCarts as $cart) {
+                    $slug = $cart['college'];
+                    $lines = $cart['lines'];
+                    $orderMode = $cart['orderMode'];
+                    $seatNumber = $cart['seatNumber'];
+
+                    $validatedLines = [];
+                    $total = 0.0;
+
+                    foreach ($lines as $line) {
+                        $menu = $this->findAvailableMenuItem((int) ($line['menu_item_id'] ?? 0), $slug);
+                        if (! $menu) {
+                            throw new \RuntimeException("One or more items in {$cart['canteenName']} are no longer available. Please open its menu and refresh your cart.");
+                        }
+                        $qty = max(1, (int) ($line['qty'] ?? 1));
+                        $unit = (float) $menu->price;
+                        $validatedLines[] = [
+                            'menu' => $menu,
+                            'qty' => $qty,
+                            'unit' => $unit,
+                        ];
+                        $total += $unit * $qty;
+                    }
+
+                    $total = round($total, 2);
+                    if ($total <= 0 || $validatedLines === []) {
+                        throw new \RuntimeException("Cart for {$cart['canteenName']} is empty.");
+                    }
+
+                    $payable = $total;
+                    $couponId = null;
+                    $discount = 0.0;
+                    
+                    $couponSessionKey = 'checkout_coupon_' . $slug;
+                    if (session()->has($couponSessionKey) && Schema::hasTable('coupons')) {
+                        $couponCode = session($couponSessionKey);
+                        $coupon = Coupon::query()
+                            ->where('code', strtoupper(trim((string) $couponCode)))
+                            ->where('is_active', true)
+                            ->first();
+                        if ($coupon) {
+                            $now = now();
+                            if (! (($coupon->starts_at && $now->lt($coupon->starts_at))
+                                || ($coupon->ends_at && $now->gt($coupon->ends_at))
+                                || ((float) $coupon->min_order_total > $total + 1e-6)
+                                || ($coupon->usage_limit !== null && (int) $coupon->used_count >= (int) $coupon->usage_limit))) {
+                                $discount = $coupon->type === 'percent'
+                                    ? round($total * ((float) $coupon->value / 100), 2)
+                                    : round((float) $coupon->value, 2);
+                                $discount = min($discount, $total);
+                                $payable = max(round($total - $discount, 2), 0.0);
+                                $couponId = $coupon->id;
+                                $coupon->increment('used_count');
+                            }
+                        }
+                        session()->forget($couponSessionKey);
+                    }
+
+                    if ($payable > 0) {
+                        UserCanteenBalance::subtract((int) auth()->id(), $slug, $payable);
+                    }
+
+                    $orderPayload = [
+                        'user_id' => auth()->id(),
+                        'order_number' => null,
+                        'status' => 'pending',
+                        'total' => $total,
+                        'canteen_id' => $slug,
+                        'is_read' => false,
+                    ];
+                    if (Schema::hasColumn('orders', 'discount_amount')) {
+                        $orderPayload['discount_amount'] = $discount;
+                    }
+                    if (Schema::hasColumn('orders', 'payable_total')) {
+                        $orderPayload['payable_total'] = $payable;
+                    }
+                    if (Schema::hasColumn('orders', 'coupon_id')) {
+                        $orderPayload['coupon_id'] = $couponId;
+                    }
+                    if (Schema::hasColumn('orders', 'order_mode')) {
+                        $orderPayload['order_mode'] = $orderMode;
+                    }
+                    if (Schema::hasColumn('orders', 'seat_number')) {
+                        $orderPayload['seat_number'] = $seatNumber;
+                    }
+
+                    $order = Order::create($orderPayload);
+
+                    $order->update([
+                        'order_number' => 'ORD-'.now()->format('Ymd').'-'.str_pad((string) $order->id, 4, '0', STR_PAD_LEFT),
+                    ]);
+
+                    foreach ($validatedLines as $row) {
+                        OrderItem::create([
+                            'order_id' => $order->id,
+                            'name' => $row['menu']->name,
+                            'price' => $row['unit'],
+                            'qty' => $row['qty'],
+                        ]);
+                    }
+
+                    $this->putCartLines($slug, []);
+                    
+                    $placedOrders[] = [
+                        'order' => $order->fresh(),
+                        'slug' => $slug,
+                        'canteenName' => $cart['canteenName'],
+                        'mode' => $orderMode,
+                        'seatNumber' => $seatNumber,
+                    ];
+                }
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['checkout' => $e->getMessage()]);
+        }
+
+        // Clear order mode session for all checked-out canteens (must be outside transaction)
+        foreach ($placedOrders as $placed) {
+            session()->forget('canteen_mode_' . $placed['slug']);
+        }
+
+        // Send notifications for all placed orders outside transaction to be safe and responsive
+        $student = auth()->user();
+        foreach ($placedOrders as $placed) {
+            $order = $placed['order'];
+            $slug = $placed['slug'];
+            $canteenName = $placed['canteenName'];
+            $orderMode = $placed['mode'];
+            $seatNumber = $placed['seatNumber'];
+
+            $itemSummary = $order->items->map(fn ($r) => $r->qty . '× ' . $r->name)->join(', ');
+
+            // Staff Notification
+            $modeLabel = $orderMode === 'dine_in' ? 'Dine-in' : 'Takeout';
+            $seatLabel = $seatNumber ? ' · Seat #' . $seatNumber : '';
+            \App\Models\ActivityNotification::notifyStaffOfCollege(
+                $slug,
+                \App\Models\ActivityNotification::TYPE_NEW_ORDER,
+                'New order — ' . ($order->order_number ?? '#' . $order->id),
+                $student->name . ' · ' . $modeLabel . $seatLabel . ' · ₱' . number_format($order->total, 2) . ($itemSummary ? ' · ' . $itemSummary : ''),
+                $order->id
+            );
+
+            // Student Notification
+            \App\Models\ActivityNotification::notifyUser(
+                auth()->id(),
+                \App\Models\ActivityNotification::TYPE_ORDER_STATUS,
+                'Order placed',
+                'Your ' . strtolower($modeLabel) . ' order at ' . $canteenName . ' has been successfully placed.',
+                $order->id
+            );
+        }
+
+        return redirect()->route('student.orders')
+            ->with('success', 'Successfully placed all your orders!');
     }
 
 
@@ -1579,6 +1835,7 @@ class StudentController extends Controller
         }
 
         session()->forget('checkout_coupon_' . $collegeNorm);
+        session()->forget('canteen_mode_' . $collegeNorm);
 
         $canteenLabel = config('canteens')[$collegeNorm]['label'] ?? $collegeNorm;
         $student = auth()->user();
