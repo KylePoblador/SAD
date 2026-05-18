@@ -114,18 +114,6 @@ class StudentController extends Controller
             return redirect()->route('student.canteen', $collegeNorm);
         }
 
-        // Auto-clear stale mode if the cart for this canteen is empty.
-        // This handles the case where the student already placed their order but the
-        // session key wasn't cleared (e.g. edge cases or a previous session).
-        $existingMode = session('canteen_mode_' . $collegeNorm);
-        if ($existingMode) {
-            $carts = session('student_carts', []);
-            $cartLines = $carts[$collegeNorm] ?? [];
-            if (empty($cartLines)) {
-                session()->forget('canteen_mode_' . $collegeNorm);
-            }
-        }
-
         $orderMode = session('canteen_mode_' . $collegeNorm);
         if (!$orderMode) {
             return view('student.canteen.mode', [
@@ -155,6 +143,7 @@ class StudentController extends Controller
         return view('student.canteen.show', [
             'college' => $collegeNorm,
             'canteenName' => $catalog[$collegeNorm]['label'],
+            'orderMode' => $orderMode,
             'totalSeats' => $totalSeats,
             'occupiedCount' => $occupiedCount,
             'availableSeats' => $availableSeats,
@@ -931,7 +920,11 @@ class StudentController extends Controller
 
         session(['canteen_mode_' . $collegeNorm => $validated['mode']]);
 
-        return redirect()->route('student.canteen', $collegeNorm);
+        $modeLabel = $validated['mode'] === 'takeout' ? 'Takeout' : 'Dine-in';
+
+        return redirect()
+            ->route('student.canteen', $collegeNorm)
+            ->with('success', $modeLabel.' selected. Browse the menu and add items to your cart.');
     }
 
     public function cartHub()

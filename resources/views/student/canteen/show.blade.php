@@ -1,6 +1,6 @@
 @php
     $categories = $menuItems->pluck('category')->unique()->filter()->values();
-    $orderMode = session('canteen_mode_' . $college);
+    $orderMode = $orderMode ?? session('canteen_mode_' . $college);
 @endphp
 
 <x-layouts.student :title="$canteenName" active="home">
@@ -77,6 +77,13 @@
             </div>
         </div>
 
+        @if ($orderMode === 'takeout')
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <strong>Takeout:</strong> No seat reservation needed. Add items to your cart, then checkout from the cart page.
+            </div>
+        @endif
+
+        @if ($orderMode === 'dine_in')
         {{-- Seats --}}
         <div
             class="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -107,6 +114,7 @@
                 Reserve seat
             </a>
         </div>
+        @endif
 
         {{-- Menu --}}
         <div>
